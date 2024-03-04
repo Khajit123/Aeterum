@@ -8,7 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace AeterumBot.Properties {
+namespace Aeternum.Properties {
     
     
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]

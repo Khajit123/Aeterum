@@ -6,8 +6,8 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{3BFFEFC2-EBB1-4036-BE9C-EB8032D6488D}</ProjectGuid>
     <OutputType>Exe</OutputType>
-    <RootNamespace>AeterumBot</RootNamespace>
-    <AssemblyName>AeterumBot</AssemblyName>
+    <RootNamespace>Aeternum</RootNamespace>
+    <AssemblyName>Aeternum</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
