@@ -22,7 +22,7 @@ namespace Aeternum
 {
     public class Program
     {
-        static void Main() { }
+        static void Main(string[] args) => StartUp(args);
         // Main
         public static DiscordClient client { get; private set; }
         public static CommandsNextExtension commands { get; private set; }
@@ -52,7 +52,7 @@ namespace Aeternum
         //-------------------------------------------------------------------
         //                   Inicializace + Nastavování
         //-------------------------------------------------------------------
-        static async Task Main(string[] args)
+        static async Task StartUp(string[] args)
         {
             JSONReader jsonReader = new JSONReader();
             await jsonReader.ReadJSON();
