@@ -20,37 +20,8 @@ using System.Timers;
 
 namespace Aeternum
 {
-    public static class Program
+    internal class Program
     {
-        // First
-        public static DiscordClient client { get; private set; }
-        public static CommandsNextExtension commands { get; private set; }
-        public static DiscordGuild Server { get; private set; }
-
-        // Roles
-        public static DiscordRole AdminRole { get; private set; }
-        public static DiscordRole WhitelistedRole { get; private set; }
-        public static DiscordRole WhitelistedPendingRole { get; private set; }
-
-        // Channels
-        public static DiscordChannel UserLoggingChannel { get; private set; }
-        public static DiscordChannel MessageLoggingChannel { get; private set; }
-        public static DiscordChannel WhitelistChannel { get; private set; }
-        public static DiscordChannel WhitelistArchiveChannel { get; private set; }
-        public static DiscordChannel ConsoleChannel { get; private set; }
-        public static DiscordChannel ChangelogChannel { get; private set; }
-        public static DiscordChannel ToDoChannel { get; private set; }
-
-        // Emojis
-        public static DiscordEmoji ApproveEmoji {  get; private set; }
-        public static DiscordEmoji DisApproveEmoji { get; private set; }
-
-        // Others
-        private static List<string> ToDoList = new List<string>();
-
-        //-------------------------------------------------------------------
-        //                   Inicializace + Nastavování
-        //-------------------------------------------------------------------
         public static async Task Main(string[] args)
         {
             JSONReader jsonReader = new JSONReader();
@@ -94,6 +65,35 @@ namespace Aeternum
             await client.ConnectAsync(activity, UserStatus.Online);
             await Task.Delay(-1);
         }
+        // First
+        public static DiscordClient client { get; private set; }
+        public static CommandsNextExtension commands { get; private set; }
+        public static DiscordGuild Server { get; private set; }
+
+        // Roles
+        public static DiscordRole AdminRole { get; private set; }
+        public static DiscordRole WhitelistedRole { get; private set; }
+        public static DiscordRole WhitelistedPendingRole { get; private set; }
+
+        // Channels
+        public static DiscordChannel UserLoggingChannel { get; private set; }
+        public static DiscordChannel MessageLoggingChannel { get; private set; }
+        public static DiscordChannel WhitelistChannel { get; private set; }
+        public static DiscordChannel WhitelistArchiveChannel { get; private set; }
+        public static DiscordChannel ConsoleChannel { get; private set; }
+        public static DiscordChannel ChangelogChannel { get; private set; }
+        public static DiscordChannel ToDoChannel { get; private set; }
+
+        // Emojis
+        public static DiscordEmoji ApproveEmoji {  get; private set; }
+        public static DiscordEmoji DisApproveEmoji { get; private set; }
+
+        // Others
+        private static List<string> ToDoList = new List<string>();
+
+        //-------------------------------------------------------------------
+        //                   Inicializace + Nastavování
+        //-------------------------------------------------------------------
 
 
         #region Eventy

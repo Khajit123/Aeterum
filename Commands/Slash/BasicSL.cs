@@ -189,7 +189,6 @@ namespace Aeternum.Commands.Slash
                 if (ToDoChannel != null) { Properties.Settings.Default.channel_todo = ToDoChannel.Id.ToString(); }
                 if (ServerImagesChannel != null) { Properties.Settings.Default.channel_ServerImages = ServerImagesChannel.Id.ToString(); }
 
-
                 await Program.UpdateInitialize();
                 await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("Nastavení kanálu proběhlo v pořádku.").AsEphemeral(true));
                 await Task.CompletedTask;
