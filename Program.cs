@@ -20,7 +20,7 @@ using System.Timers;
 
 namespace Aeternum
 {
-    internal class Program
+    static class Program
     {
         // Main
         public static DiscordClient client { get; private set; }
