@@ -51,7 +51,7 @@ namespace Aeternum
         //-------------------------------------------------------------------
         //                   Inicializace + Nastavování
         //-------------------------------------------------------------------
-        static async Task Main(string[] args)
+        public static async Task Main(string[] args)
         {
             JSONReader jsonReader = new JSONReader();
             await jsonReader.ReadJSON();
