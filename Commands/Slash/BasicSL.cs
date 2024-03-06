@@ -7,7 +7,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-
 namespace Aeternum.Commands.Slash
 {
     public class BasicSL : ApplicationCommandModule
@@ -180,16 +179,18 @@ namespace Aeternum.Commands.Slash
                 [Option("ToDo-Channel", "Kde se budou psát To-Do zprávy")] DiscordChannel ToDoChannel = null,
                 [Option("ServerImages-Channel", "Kde budou jen obrázky Serveru")] DiscordChannel ServerImagesChannel = null)
             {
-                if (UserLogging != null) { Properties.Settings.Default.channel_UserLogging = UserLogging.Id.ToString(); }
-                if (MessageLogging != null) { Properties.Settings.Default.channel_MessageLogging = MessageLogging.Id.ToString(); }
-                if (WhitelistChannel != null) { Properties.Settings.Default.channel_Whitelist = WhitelistChannel.Id.ToString(); }
-                if (WhitelistArchiveChannel != null) { Properties.Settings.Default.channel_WhitelistArchive = WhitelistArchiveChannel.Id.ToString(); }
-                if (ConsoleChannel != null) { Properties.Settings.Default.channel_Console = ConsoleChannel.Id.ToString(); }
-                if (ChangelogChannel != null) { Properties.Settings.Default.channel_changelog = ChangelogChannel.Id.ToString(); }
-                if (ToDoChannel != null) { Properties.Settings.Default.channel_todo = ToDoChannel.Id.ToString(); }
-                if (ServerImagesChannel != null) { Properties.Settings.Default.channel_ServerImages = ServerImagesChannel.Id.ToString(); }
+                List<Database.db_channel> channelsToChange = new List<Database.db_channel>();
+                if (UserLogging != null) { channelsToChange.Add(new Database.db_channel(Database.Channels.UserLogging, UserLogging.Id.ToString())); Program.UserLoggingChannel = UserLogging; }
+                if (MessageLogging != null) { channelsToChange.Add(new Database.db_channel(Database.Channels.MessageLogging, MessageLogging.Id.ToString())); Program.MessageLoggingChannel = MessageLogging; }
+                if (WhitelistChannel != null) { channelsToChange.Add(new Database.db_channel(Database.Channels.Whitelist, WhitelistChannel.Id.ToString())); Program.WhitelistChannel = WhitelistChannel; }
+                if (WhitelistArchiveChannel != null) { channelsToChange.Add(new Database.db_channel(Database.Channels.WhitelistArchive, WhitelistArchiveChannel.Id.ToString())); Program.WhitelistArchiveChannel = WhitelistArchiveChannel; }
+                if (ConsoleChannel != null) { channelsToChange.Add(new Database.db_channel(Database.Channels.Console, ConsoleChannel.Id.ToString())); Program.ConsoleChannel = ConsoleChannel; }
+                if (ChangelogChannel != null) { channelsToChange.Add(new Database.db_channel(Database.Channels.Changelog, ChangelogChannel.Id.ToString())); Program.ChangelogChannel = ChangelogChannel; }
+                if (ToDoChannel != null) { channelsToChange.Add(new Database.db_channel(Database.Channels.ToDo, ToDoChannel.Id.ToString())); Program.ToDoChannel = ToDoChannel; }
+                if (ServerImagesChannel != null) { channelsToChange.Add(new Database.db_channel(Database.Channels.ServerImages, ServerImagesChannel.Id.ToString())); Program.ServerImagesChannel = ServerImagesChannel; }
 
-                await Program.UpdateInitialize();
+                if (channelsToChange.Count > 0) { await Program.UpdateDatabaseChannels(channelsToChange.ToArray()); }
+
                 await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("Nastavení kanálu proběhlo v pořádku.").AsEphemeral(true));
                 await Task.CompletedTask;
                 return;
@@ -202,11 +203,13 @@ namespace Aeternum.Commands.Slash
                 [Option("PendingWhitelist-Role", "Role hráčů, co čekají a nemají whitelist")] DiscordRole PendingRole = null,
                 [Option("Admin-Role", "Role, která má přístup ke všem admin commandům")] DiscordRole AdminRole = null)
             {
-                if (WhitelistRole != null) { Properties.Settings.Default.role_Whitelisted = WhitelistRole.Id.ToString(); }
-                if (PendingRole != null) { Properties.Settings.Default.role_PendingWhitelist = PendingRole.Id.ToString(); }
-                if (AdminRole != null) { Properties.Settings.Default.role_Admin = AdminRole.Id.ToString(); }
+                List<Database.db_roles> rolesToChange = new List<Database.db_roles>();
+                if (WhitelistRole != null) { rolesToChange.Add(new Database.db_roles(Database.Roles.Whitelisted, WhitelistRole.Id.ToString())); Program.WhitelistedRole = WhitelistRole; }
+                if (PendingRole != null) { rolesToChange.Add(new Database.db_roles(Database.Roles.NonWhitelisted, PendingRole.Id.ToString())); Program.NonWhitelistedRole = PendingRole; }
+                if (AdminRole != null) { rolesToChange.Add(new Database.db_roles(Database.Roles.Admin, AdminRole.Id.ToString())); Program.AdminRole = AdminRole; }
 
-                await Program.UpdateInitialize();
+                if (rolesToChange.Count > 0) { await Program.UpdateDatabaseRoles(rolesToChange.ToArray()); }
+
                 await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("Nastavení rolí proběhlo v pořádku.").AsEphemeral(true));
                 await Task.CompletedTask;
             }
@@ -222,9 +225,8 @@ namespace Aeternum.Commands.Slash
                     // Whitelist Message channel
                     case 0:
                         var msg = Messages.Default.first_Whitelist;
-                        var channel = Program.GetChannelFromID(Properties.Settings.Default.channel_Whitelist).Result;
 
-                        var sent = await channel.SendMessageAsync(msg);
+                        var sent = await Program.WhitelistChannel.SendMessageAsync(msg);
                         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent($"Zpráva byla vygenerována {sent.Channel.Mention}.").AsEphemeral(true));
                         break;
 
@@ -247,32 +249,40 @@ namespace Aeternum.Commands.Slash
                 [Choice("Player", 3)]
                 [Option("Typ-Thumbnail-Whitelist", "Typ skinu v pravém rohu na přihlášce")] long imgType = -1)
             {
-                if (TotalCount > -1) { Properties.Settings.Default.int_WhitelistTotalCount = Convert.ToInt16(TotalCount); }
-                if (SuccessCount > -1) { Properties.Settings.Default.int_WhitelistSuccessCount = Convert.ToInt16(SuccessCount); }
-                if (FailCount > -1) { Properties.Settings.Default.int_WhitelistFailCount = Convert.ToInt16(FailCount); }
-                if (automateWhitelist != Properties.Settings.Default.automateWhitelist) { Properties.Settings.Default.automateWhitelist = automateWhitelist; }
+                List<Database.db_ints> intsToChange = new List<Database.db_ints>();
+                List<Database.db_booleans> booleansToChange = new List<Database.db_booleans>();
+                List<Database.db_other> otherToChange = new List<Database.db_other>();
+
+                if (TotalCount > -1) { intsToChange.Add(new Database.db_ints(Database.Ints.WhitelistTotal, Int32.Parse(TotalCount.ToString()), true)); }
+                if (SuccessCount > -1) { intsToChange.Add(new Database.db_ints(Database.Ints.WhitelistSuccess, Int32.Parse(SuccessCount.ToString()), true)); }
+                if (FailCount > -1) { intsToChange.Add(new Database.db_ints(Database.Ints.WhitelistFail, Int32.Parse(FailCount.ToString()), true));}
+                if (automateWhitelist != Program.AutomateWhitelist) { booleansToChange.Add(new Database.db_booleans(Database.Booleans.AutomateWhitelist, automateWhitelist)); Program.AutomateWhitelist = automateWhitelist; }
                 switch (imgType)
                 {
                     case 0:
-                        Properties.Settings.Default.imgType_WhitelistThumbnail = "Avatar";
+                        otherToChange.Add(new Database.db_other(Database.Other.WhitelistThumbnailType, "Avatar"));
+                        Program.WhitelistThumbnailType = "Avatar";
                         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent($"Hodnoty byly upraveny.\n" +
                             $"https://mc-heads.net/Avatar/Khajit_").AsEphemeral(true));
                         await Task.CompletedTask;
                         break;
                     case 1:
-                        Properties.Settings.Default.imgType_WhitelistThumbnail = "Head";
+                        otherToChange.Add(new Database.db_other(Database.Other.WhitelistThumbnailType, "Head"));
+                        Program.WhitelistThumbnailType = "Head";
                         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent($"Hodnoty byly upraveny.\n" +
                             $"https://mc-heads.net/Head/Khajit_").AsEphemeral(true));
                         await Task.CompletedTask;
                         break;
                     case 2:
-                        Properties.Settings.Default.imgType_WhitelistThumbnail = "Body";
+                        otherToChange.Add(new Database.db_other(Database.Other.WhitelistThumbnailType, "Body"));
+                        Program.WhitelistThumbnailType = "Body";
                         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent($"Hodnoty byly upraveny.\n" +
                             $"https://mc-heads.net/Body/Khajit_").AsEphemeral(true));
                         await Task.CompletedTask;
                         break;
                     case 3:
-                        Properties.Settings.Default.imgType_WhitelistThumbnail = "Player";
+                        otherToChange.Add(new Database.db_other(Database.Other.WhitelistThumbnailType, "Player"));
+                        Program.WhitelistThumbnailType = "Player";
                         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent($"Hodnoty byly upraveny.\n" +
                             $"https://mc-heads.net/Player/Khajit_").AsEphemeral(true));
                         await Task.CompletedTask;
@@ -281,7 +291,10 @@ namespace Aeternum.Commands.Slash
                         break;
                 }
 
-                await Program.UpdateInitialize();
+                if (intsToChange.Count > 0) { await Program.UpdateDatabaseInts(intsToChange.ToArray()); }
+                if (booleansToChange.Count > 0) { await Program.UpdateDatabaseBooleans(booleansToChange.ToArray()); }
+                if (otherToChange.Count > 0) { await Program.UpdateDatabaseOther(otherToChange.ToArray());}
+
                 await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent($"Hodnoty byly upraveny.").AsEphemeral(true));
                 await Task.CompletedTask;
             }

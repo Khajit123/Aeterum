@@ -1,4 +1,8 @@
 ﻿{
 	"token": "token",
-	"prefix": "!"
+	"Host": "host",
+	"Port": null,
+	"Database": "database",
+	"Username": "username",
+	"Password": "password"
 }
