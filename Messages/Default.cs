@@ -194,25 +194,8 @@ namespace Aeternum.Messages
         {
             get
             {
-                var embed = new DiscordEmbedBuilder()
-                {
-                    Color = DiscordColor.Red,
-                    Title = "Upozornění!",
-                    Description = "Někdo čeká na zkontrolování a ověření žádosti, utíkej mu kliknout na tlačítko",
-                    Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail()
-                    {
-                        Url = Program.Server.IconUrl,
-                    },
-                    ImageUrl = "https://upload.wikimedia.org/wikipedia/commons/2/2e/Exclamation_mark_red.png",
-                    Footer = new DiscordEmbedBuilder.EmbedFooter()
-                    {
-                        Text = "Aeterum Team",
-                        IconUrl = Program.Server.IconUrl,
-                    }
-                };
                 var msg = new DiscordMessageBuilder()
                 {
-                    Embed = embed,
                 };
 
                 return msg;

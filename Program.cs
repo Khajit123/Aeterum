@@ -7,6 +7,7 @@ using DSharpPlus.EventArgs;
 using DSharpPlus.Interactivity;
 using DSharpPlus.Interactivity.Extensions;
 using DSharpPlus.SlashCommands;
+using Google.Protobuf.WellKnownTypes;
 using MySqlConnector;
 using Newtonsoft.Json;
 using System;
@@ -166,6 +167,8 @@ namespace Aeternum
         // Emojis
         public static DiscordEmoji ApproveEmoji {  get; private set; }
         public static DiscordEmoji DisApproveEmoji { get; private set; }
+        public static DiscordEmoji Btn_ApproveEmoji { get; private set; }
+        public static DiscordEmoji Btn_DisApproveEmoji { get; private set; }
 
         // Ints
         public static int WhitelistTotalCount;
@@ -236,11 +239,13 @@ namespace Aeternum
             #region Safe Initialize
             ApproveEmoji = GetEmojiFromName(":white_check_mark:").Result;
             DisApproveEmoji = GetEmojiFromName(":x:").Result;
+            Btn_ApproveEmoji = GetEmojiFromName(":heavy_check_mark:").Result;
+            Btn_DisApproveEmoji = GetEmojiFromName(":heavy_multiplication_x:").Result;
             await DatabaseStartInitialize();
             await UpdateToDoDictionary();
             #endregion
             // Timer for periodic update Time on whitelist
-            Timer timer = new Timer(TimeSpan.FromSeconds(60).TotalMilliseconds);
+            Timer timer = new Timer(TimeSpan.FromMinutes(1).TotalMilliseconds);
             timer.AutoReset = true;
             timer.Elapsed += new ElapsedEventHandler(VoidUpdater);
             timer.Start();
@@ -708,7 +713,7 @@ namespace Aeternum
             embedMessage.AddField($"{DisApproveEmoji} ({noUsers.Count - 1})", noUsersString, false);
             embedMessage.Footer = new DiscordEmbedBuilder.EmbedFooter()
             {
-                Text = "Vytvořená přihláška: " + args.Message.CreationTimestamp.ToString()
+                Text = "Vytvořená přihláška: " + args.Message.CreationTimestamp.UtcDateTime.ToString()
             };
             await WhitelistArchiveChannel.SendMessageAsync(embedMessage);
             await args.Message.DeleteAsync();
@@ -732,8 +737,8 @@ namespace Aeternum
         private static async Task CreateWhitelist(ModalSubmitEventArgs args)
         {
             // Buttons
-            var approveButton = CreateButtonComponent(ButtonStyle.Success, "btn_approve_id", "Prošel", false, ApproveEmoji).Result;
-            var closeButton = CreateButtonComponent(ButtonStyle.Danger, "btn_close_id", "Neprošel", false, DisApproveEmoji).Result;
+            var approveButton = CreateButtonComponent(ButtonStyle.Success, "btn_approve_id", "Prošel", false, Btn_ApproveEmoji).Result;
+            var closeButton = CreateButtonComponent(ButtonStyle.Danger, "btn_close_id", "Neprošel", false, Btn_DisApproveEmoji).Result;
 
             // Messages
             var msg = new DiscordMessageBuilder()
@@ -777,7 +782,7 @@ namespace Aeternum
             if (messages.Count == 0) return;
             foreach (var message in messages)
             {
-                var whitelistTime = message.Timestamp.DateTime.AddHours(48);
+                var whitelistTime = message.Timestamp.DateTime.AddMinutes(1);
                 int minutes = Convert.ToInt16(whitelistTime.Subtract(DateTime.Now).Minutes);
                 int hours = Convert.ToInt16(whitelistTime.Subtract(DateTime.Now).Hours);
                 int days = Convert.ToInt16(whitelistTime.Subtract(DateTime.Now).Days);
@@ -805,15 +810,32 @@ namespace Aeternum
                         }
                         else if (yesCount == noCount)
                         {
+                            var _msg = Messages.Default.whitelist_Pending;
+                            var _embed = new DiscordEmbedBuilder()
+                            {
+                                Color = DiscordColor.White,
+                                Title = "Upozornění!",
+                                Description = "Někdo čeká na zkontrolování a ověření žádosti",
+                                Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail()
+                                {
+                                    Url = "https://4vector.com/i/free-vector-admin-tools-icon_098300_Admin_tools_icon.png",
+                                },
+                                Footer = new DiscordEmbedBuilder.EmbedFooter()
+                                {
+                                    Text = "Aeterum Team",
+                                    IconUrl = Program.Server.IconUrl,
+                                }
+                            };
+                            _embed.AddField("Zpráva", message.JumpLink.ToString(), false);
+                            _msg.AddEmbed(_embed);
+                            _msg.WithContent(message.Content);
+
                             foreach (var member in members)
                             {
                                 var DMChannel = await member.CreateDmChannelAsync();
 
-                                if (DMChannel.GetMessagesAsync(5).Result.First().Content != message.JumpLink.ToString())
+                                if (DMChannel.GetMessagesAsync(5).Result.First().Content != message.Content)
                                 {
-                                    var _msg = Messages.Default.whitelist_Pending;
-                                    _msg.WithContent(message.JumpLink.ToString());
-
                                     await DMChannel.SendMessageAsync(_msg);
                                 }
                             }
@@ -825,19 +847,39 @@ namespace Aeternum
                     }
                     else
                     {
+                        var _msg = Messages.Default.whitelist_Pending;
+                        var _embed = new DiscordEmbedBuilder()
+                        {
+                            Color = DiscordColor.White,
+                            Title = "Upozornění!",
+                            Description = "Někdo čeká na zkontrolování a ověření žádosti, utíkej mu kliknout na tlačítko",
+                            Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail()
+                            {
+                                Url = "https://4vector.com/i/free-vector-admin-tools-icon_098300_Admin_tools_icon.png",
+                            },
+                            Footer = new DiscordEmbedBuilder.EmbedFooter()
+                            {
+                                Text = "Aeterum Team",
+                                IconUrl = Program.Server.IconUrl,
+                            }
+                        };
+                        _embed.AddField("Zpráva", message.JumpLink.ToString(), false);
+                        _msg.AddEmbed(_embed);
+                        _msg.WithContent(message.Content);
+
                         var members = await GetMembersByRole(AdminRole);
                         foreach (var member in members)
                         {
                             var DMChannel = await member.CreateDmChannelAsync();
-
-                            if (DMChannel.GetMessagesAsync(5).Result.First().Content != message.JumpLink.ToString())
+                            try
                             {
-                                var _msg = Messages.Default.whitelist_Pending;
-                                _msg.WithContent(message.JumpLink.ToString());
-
-
-                                await DMChannel.SendMessageAsync(_msg);
+                                if (DMChannel.GetMessagesAsync(5).Result.First().Content != message.Content)
+                                {
+                                    await DMChannel.SendMessageAsync(_msg);
+                                    Console.WriteLine($"[INFO] - {member.Username} byla poslána zpráva whitelist_pending");
+                                }
                             }
+                            catch (Exception ex) { Console.WriteLine(ex); }
                         }
                     }
                 }
