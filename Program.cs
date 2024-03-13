@@ -782,7 +782,7 @@ namespace Aeternum
             if (messages.Count == 0) return;
             foreach (var message in messages)
             {
-                var whitelistTime = message.Timestamp.DateTime.AddMinutes(1);
+                var whitelistTime = message.Timestamp.DateTime.AddHours(48);
                 int minutes = Convert.ToInt16(whitelistTime.Subtract(DateTime.Now).Minutes);
                 int hours = Convert.ToInt16(whitelistTime.Subtract(DateTime.Now).Hours);
                 int days = Convert.ToInt16(whitelistTime.Subtract(DateTime.Now).Days);
