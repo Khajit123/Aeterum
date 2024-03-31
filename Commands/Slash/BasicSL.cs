@@ -18,8 +18,8 @@ namespace Aeternum.Commands.Slash
         [SlashCommand("oznámení", "Zpráva pro oznámení")]
         [RequireUserPermissions(Permissions.Administrator)]
         public async Task InfoEmbed(InteractionContext ctx,
-            [Option("titulek", "Titulek o co se jedná")] string title,
-            [Option("popisek", "Podtitulek, zde se rozepiš")] string desc,
+            [Option("titulek", "Titulek o co se jedná")] string title = null,
+            [Option("popisek", "Podtitulek, zde se rozepiš")] string desc = null,
             [Option("embedcolor", "Barva embedu (na levém boku) ve formátu HEX")] string colorHEX = "FFFF00",
             [Option("tagRole", "Role na označení")] DiscordRole role = null,
             [Option("autor", "Kdo bude jako autor ve zprávě")] DiscordUser autor = null,
@@ -35,19 +35,37 @@ namespace Aeternum.Commands.Slash
                 Author = new DiscordEmbedBuilder.EmbedAuthor
                 {
                     Name = "Oznámení",
-                    IconUrl = Program.Server.IconUrl,
                 },
-                Title = title,
-                Description = desc,
+                Footer = new DiscordEmbedBuilder.EmbedFooter()
+                {
+                    Text = "Aeterum Team",
+                    IconUrl = Program.Server.IconUrl,
+                }
             };
+            if (title == null && desc == null && role == null && autor == null && thumbnailIMG == null && textIMG == null)
+            {
+                var modal = new DiscordInteractionResponseBuilder()
+                    .WithTitle("Oznámení")
+                    .WithCustomId("modal_oznameni");
+                modal.AddComponents(new TextInputComponent("Titulek", "oznameniTitleID", null, "Oznámení", true, TextInputStyle.Short));
+                modal.AddComponents(new TextInputComponent("Popisek", "oznameniDescID", "Zde se rozepiš", null, true, TextInputStyle.Paragraph));
+                modal.AddComponents(new TextInputComponent("Obrázek v právém horním rohu", "oznameniThumbnailimgID", "Pouze url link na obrázek", null, false, TextInputStyle.Short));
+                modal.AddComponents(new TextInputComponent("Obrázek pod zprávou", "oznameniBigimgID", "Pouze url link na obrázek", null, false, TextInputStyle.Short));
+
+                await ctx.Interaction.CreateResponseAsync(InteractionResponseType.Modal, modal);
+                await Task.CompletedTask;
+                return;
+            }
+            if (title != null) embedMessage.Title = title;
+            if (desc != null) embedMessage.Description = desc;
             if (role != null)
             {
                 msg.WithContent(role.Mention);
             }
             if (autor != null) embedMessage.WithFooter(autor.Username, autor.AvatarUrl);
-            else embedMessage.WithFooter("Aeterum Team", ctx.Guild.IconUrl);
             if (thumbnailIMG != null) { embedMessage.Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail { Url = thumbnailIMG.Url, }; }
             if (textIMG != null) { embedMessage.ImageUrl = textIMG.Url; }
+
 
             //if (fieldAdd)
             //{
@@ -91,6 +109,64 @@ namespace Aeternum.Commands.Slash
         }
 
         //--------------------------------------------------
+        //                   Oznámení Message ID
+        // -------------------------------------------------
+        [Category("Message")]
+        [SlashCommand("oznámeníID", "Zpráva pro oznámení pomocí ID zprávy")]
+        [RequireUserPermissions(Permissions.Administrator)]
+        public async Task oznameniMSGID(InteractionContext ctx,
+            [Option("channel", "Kanál, kde je zpráva, kterou chceš zkopírovat")] DiscordChannel channel,
+            [Option("messageID", "Zkopiruje se obsah zprávy v tomto kanále podle ID")] string messageID,
+            [Option("titulek", "Titulek o co se jedná")] string title = null,
+            [Option("embedcolor", "Barva embedu (na levém boku) ve formátu HEX")] string colorHEX = "FFFF00",
+            [Option("tagRole", "Role na označení")] DiscordRole role = null,
+            [Option("autor", "Kdo bude jako autor ve zprávě")] DiscordUser autor = null,
+            [Option("thumbnail", "Vlož obrázek zde, který se objeví v pravém horním rohu")] DiscordAttachment thumbnailIMG = null,
+            [Option("bigImage", "Vlož obrázek zde, který bude ukázán ve zprávě")] DiscordAttachment textIMG = null)
+        {
+            ulong ulongMSG = Convert.ToUInt64(messageID);
+
+            var msg = new DiscordMessageBuilder();
+            var embedMessage = new DiscordEmbedBuilder
+            {
+                Color = new DiscordColor(colorHEX),
+                Author = new DiscordEmbedBuilder.EmbedAuthor
+                {
+                    Name = "Oznámení",
+                },
+                Footer = new DiscordEmbedBuilder.EmbedFooter()
+                {
+                    Text = "Aeterum Team",
+                    IconUrl = Program.Server.IconUrl,
+                }
+            };
+            if (title != null) embedMessage.Title = title;
+            try
+            {
+                var selectedMSG = await channel.GetMessageAsync(ulongMSG);
+                embedMessage.WithDescription(selectedMSG.Content.ToString());
+                await Task.CompletedTask;
+            }
+            catch (Exception)
+            {
+                await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("Nepovadlo se najít zprávu podle ID, zkontroluj to. Pro přepsání zmáčkni šipku nahoru").AsEphemeral(true));
+                await Task.CompletedTask;
+                return;
+            }
+            if (role != null)
+            {
+                msg.WithContent(role.Mention);
+            }
+            if (autor != null) embedMessage.WithFooter(autor.Username, autor.AvatarUrl);
+            if (thumbnailIMG != null) { embedMessage.Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail { Url = thumbnailIMG.Url, }; }
+            if (textIMG != null) { embedMessage.ImageUrl = textIMG.Url; }
+
+            await ctx.Channel.SendMessageAsync(msg.Content, embed: embedMessage);
+            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("Zpráva byla úspěšně vytvořena.").AsEphemeral(true));
+            await Task.CompletedTask;
+        }
+
+        //--------------------------------------------------
         //           Upravení zprávy od bota
         // -------------------------------------------------
         [Category("Message")]
@@ -109,6 +185,7 @@ namespace Aeternum.Commands.Slash
         {
             ulong ulongMSG = Convert.ToUInt64(msgID);
             DiscordMessage msg = null;
+
             try
             {
                 msg = await channel.GetMessageAsync(ulongMSG);
@@ -136,24 +213,39 @@ namespace Aeternum.Commands.Slash
                     .WithAllowedMentions(new IMention[] { new RoleMention(msg.MentionedRoles[0]) });
             }
 
-            var embedMessage = new DiscordEmbedBuilder
+            if (msg.Embeds != null)
             {
-                Color = new DiscordColor(color),
-                Author = new DiscordEmbedBuilder.EmbedAuthor
+                var embedMessage = new DiscordEmbedBuilder
                 {
-                    Name = msg.Author.Username,
-                    IconUrl = msg.Author.AvatarUrl
-                },
-            };
-            if (color != null) embedMessage.WithColor(new DiscordColor(color));
-            if (autor != null) embedMessage.WithFooter(autor.Username, autor.AvatarUrl);
-            else embedMessage.WithFooter("Aeterum Team", ctx.Guild.IconUrl);
-            if (title != null) embedMessage.WithTitle(title);
-            if (desc != null) embedMessage.WithDescription(desc);
-            if (thumbnailIMG != null) { embedMessage.Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail { Url = thumbnailIMG.Url, }; }
-            if (textIMG != null) { embedMessage.ImageUrl = textIMG.Url; }
+                    Color = msg.Embeds[0].Color,
+                    Author = new DiscordEmbedBuilder.EmbedAuthor
+                    {
+                        Name = msg.Embeds[0].Author.Name,
+                        IconUrl = msg.Embeds[0].Author.IconUrl.ToString()
+                    },
+                    Title = msg.Embeds[0].Title,
+                    Description = msg.Embeds[0].Description,
+                    Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail()
+                    {
+                        Url = msg.Embeds[0].Thumbnail.Url.ToString(),
+                    },
+                    ImageUrl = msg.Embeds[0].Image.Url.ToString(),
+                    Footer = new DiscordEmbedBuilder.EmbedFooter() 
+                    {
+                        Text = msg.Embeds[0].Footer.Text,
+                        IconUrl = msg.Embeds[0].Footer.IconUrl.ToString()
+                    }
+                };
+                if (color != null) embedMessage.WithColor(new DiscordColor(color));
+                if (autor != null) embedMessage.WithFooter(autor.Username, autor.AvatarUrl);
+                if (title != null) embedMessage.WithTitle(title);
+                if (desc != null) embedMessage.WithDescription(desc);
+                if (thumbnailIMG != null) { embedMessage.Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail { Url = thumbnailIMG.Url, }; }
+                if (textIMG != null) { embedMessage.ImageUrl = textIMG.Url; }
+                rolemsg.AddEmbed(embedMessage);
+            }
 
-            await msg.ModifyAsync(rolemsg.Content, (DiscordEmbed)embedMessage);
+            await msg.ModifyAsync(rolemsg);
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent($"Zpráva byla úspěšně upravená: {msg.JumpLink}.").AsEphemeral(true));
             await Task.CompletedTask;
         }
@@ -306,30 +398,49 @@ namespace Aeternum.Commands.Slash
         [SlashCommand("changelog", "Zpráva ohledně změn")]
         [RequireUserPermissions(Permissions.Administrator)]
         public async Task changelogMsg(InteractionContext ctx,
-            [Option("Nyní", "Zpráva jak je to teď")] string Current,
             [Option("Před", "Zpráva jak to bylo před úpravou")] string Before = null,
+            [Option("Nyní", "Zpráva jak je to teď")] string Current = null,
+            [Option("ThumbnailImage", "Obrázek v pravém horním rohu zprávy")] DiscordAttachment thumbnailImg = null,
             [Option("BigImage", "Obrázek na spodní části zprávy")] DiscordAttachment bigImg = null,
             [Option("Titulek", "Titulek místo Changelog")] string Tittle = "Changelog",
             [Option("DisableCodeFormat", "Zruší kódový formát pro před a po")] bool DisableCode = false)
 
         {
-            string codeFormatSymbol = "`";
-            if (DisableCode == true) codeFormatSymbol = "";
-            var embedmsg = new DiscordEmbedBuilder()
+            if (Current == null)
             {
-                Color = DiscordColor.Orange,
-                Title = Tittle,
-                Footer = new DiscordEmbedBuilder.EmbedFooter()
+                var modal = new DiscordInteractionResponseBuilder()
+                    .WithTitle("Changelog")
+                    .WithCustomId("modal_changelog");
+                modal.AddComponents(new TextInputComponent("Před", "changelogBeforeID", null, "`Zde vlož text(není nutné)`", false, TextInputStyle.Paragraph));
+                modal.AddComponents(new TextInputComponent("Nyní", "changelogNowID", null, "`Zde vlož text(nutné)`", true, TextInputStyle.Paragraph));
+                modal.AddComponents(new TextInputComponent("Titulek", "changelogTittleID", null, "Changelog", true, TextInputStyle.Short));
+                modal.AddComponents(new TextInputComponent("Obrázek v právém horním rohu", "changelogThumbnailimgID", "Pouze url link na obrázek", null, false, TextInputStyle.Short));
+                modal.AddComponents(new TextInputComponent("Obrázek pod zprávou", "changelogBigimgID", "Pouze url link na obrázek", null, false, TextInputStyle.Short));
+
+                await ctx.Interaction.CreateResponseAsync(InteractionResponseType.Modal, modal);
+                await Task.CompletedTask;
+            }
+            else
+            {
+                string codeFormatSymbol = "`";
+                if (DisableCode == true) codeFormatSymbol = "";
+                var embedmsg = new DiscordEmbedBuilder()
                 {
-                    Text = ctx.Member.Nickname,
-                    IconUrl = ctx.Member.AvatarUrl.ToString(),
-                }
-            };
-            if (bigImg != null) { embedmsg.WithImageUrl(bigImg.Url); }
-            if (Before != null) { embedmsg.AddField("Před", $"{codeFormatSymbol}{Before}{codeFormatSymbol}", false); }
-            embedmsg.AddField("Nyní", $"{codeFormatSymbol}{Current}{codeFormatSymbol}", false);
-            await ctx.Channel.SendMessageAsync(embed: embedmsg);
-            await Task.CompletedTask;
+                    Color = DiscordColor.Orange,
+                    Title = Tittle,
+                    Footer = new DiscordEmbedBuilder.EmbedFooter()
+                    {
+                        Text = ctx.Member.Nickname,
+                        IconUrl = ctx.Member.AvatarUrl.ToString(),
+                    }
+                };
+                if (thumbnailImg != null) { embedmsg.WithThumbnail(thumbnailImg.Url); }
+                if (bigImg != null) { embedmsg.WithImageUrl(bigImg.Url); }
+                if (Before != null) { embedmsg.AddField("Před", $"{codeFormatSymbol}{Before}{codeFormatSymbol}", false); }
+                embedmsg.AddField("Nyní", $"{codeFormatSymbol}{Current}{codeFormatSymbol}", false);
+                await ctx.Channel.SendMessageAsync(embed: embedmsg);
+                await Task.CompletedTask;
+            }
         }
 
         //-------------------------------------------------------------------

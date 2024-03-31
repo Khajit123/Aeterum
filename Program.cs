@@ -14,8 +14,10 @@ using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -259,36 +261,32 @@ namespace Aeternum
         //-------------------------------------------------------------------
         private static async Task OnButtonClick(DiscordClient sender, ComponentInteractionCreateEventArgs args)
         {
-            DiscordMember[] Adminmembers = GetMembersByRole(AdminRole).Result;
+            DiscordMember member = GetMemberFromUser(args.User).Result;
+            bool IsAdmin = member.Roles.Contains(AdminRole);
+            //bool IsWhitelisted = member.Roles.Contains(WhitelistedRole);
+            bool IsNonWhitelisted = member.Roles.Contains(NonWhitelistedRole);
+            
 
-            if (args.Id == "btn_close_id")
+            if (args.Id == "btn_close_id" && IsAdmin)
             {
-                foreach (var member in Adminmembers.Where(member => member.Id == args.User.Id))
-                {
-                    await WhitelistArchive(args);
-                    await Task.CompletedTask;
-                }
+                await WhitelistArchive(args);
+                await Task.CompletedTask;
             }
-            else if (args.Id == "btn_approve_id")
+            else if (args.Id == "btn_approve_id" && IsAdmin)
             {
-                foreach (var member in Adminmembers.Where(member => member.Id == args.User.Id))
-                {
-                    await WhitelistSuccess(args);
-                    await Task.CompletedTask;
-                }
+                await WhitelistSuccess(args);
+                await Task.CompletedTask;
             }
-            else if (args.Id == "btn_create_whitelist")
+            else if (args.Id == "btn_create_whitelist" && IsNonWhitelisted)
             {
-                DiscordMember[] NonWhitelistedMembers = GetMembersByRole(NonWhitelistedRole).Result;
-                foreach (var member in NonWhitelistedMembers.Where(member => member.Id == args.User.Id))
-                {
-                    await WhitelistModal(args);
-                    await Task.CompletedTask;
-                }
+                await WhitelistModal(args);
+                await Task.CompletedTask;
+            }
+            else
+            {
+                await Task.CompletedTask; 
             }
 
-            await Task.CompletedTask;
-            return;
 
         }
 
@@ -521,7 +519,7 @@ namespace Aeternum
                 if (args.Interaction.Data.CustomId == "modal_whitelist")
                 {
                     var messages = await WhitelistChannel.GetMessagesAsync();
-                    foreach (var msg in messages)
+                    foreach (var msg in messages) // Pokud už jednu přihlašká má tak zamítnout submit
                     {
                         if (msg.MentionedUsers.Count > 0)
                         {
@@ -539,6 +537,10 @@ namespace Aeternum
                 {
                     await CreateChangelog(args);
                 }
+                else if (args.Interaction.Data.CustomId == "modal_oznameni")
+                {
+                    await CreateOznameni(args);
+                }
             }
             await Task.CompletedTask;
             return;
@@ -551,22 +553,23 @@ namespace Aeternum
         //-------------------------------------------------------------------
         private static async Task CreateChangelog(ModalSubmitEventArgs args)
         {
+            DiscordMember member = GetMemberFromUser(args.Interaction.User).Result;
             // Messages
             var embedMessage = new DiscordEmbedBuilder
             {
                 Color = DiscordColor.Orange,
-                Title = args.Values["titleID"],
+                Title = args.Values["changelogTittleID"],
                 Footer = new DiscordEmbedBuilder.EmbedFooter()
                 {
-                    Text = args.Interaction.User.Username,
-                    IconUrl = args.Interaction.User.AvatarUrl,
+                    Text = member.Nickname,
+                    IconUrl = member.AvatarUrl,
                 }
             };
-            if (args.Values["beforeChangeID"] != "")
-            {
-                embedMessage.AddField("Před", $"`{args.Values["beforeChangeID"]}`", false);
-            }
-            embedMessage.AddField("Po", $"`{args.Values["afterChangeID"]}`", false);
+            if (args.Values["changelogThumbnailimgID"] != null) { embedMessage.WithThumbnail(args.Values["changelogThumbnailimgID"]); }
+            if (args.Values["changelogBigimgID"] != null) { embedMessage.WithImageUrl(args.Values["changelogBigimgID"]); }
+            if (args.Values["changelogBeforeID"] != null) { embedMessage.AddField("Před", $"{args.Values["changelogBeforeID"]}", false); }
+            if (args.Values["changelogNowID"] != null) { embedMessage.AddField("Nyní", $"{args.Values["changelogNowID"]}", false); }
+
             var msg = new DiscordMessageBuilder().WithEmbed(embedMessage);
 
             // Exit
@@ -574,6 +577,36 @@ namespace Aeternum
             await Task.CompletedTask;
         }
 
+        //-------------------------------------------------------------------
+        //                   Funkce: Oznamení
+        //-------------------------------------------------------------------
+        private static async Task CreateOznameni(ModalSubmitEventArgs args)
+        {
+            var embedMessage = new DiscordEmbedBuilder
+            {
+                Color = new DiscordColor("FFFF00"),
+                Author = new DiscordEmbedBuilder.EmbedAuthor
+                {
+                    Name = "Oznámení",
+                },
+                Footer = new DiscordEmbedBuilder.EmbedFooter()
+                {
+                    Text = "Aeterum Team",
+                    IconUrl = Server.IconUrl,
+                }
+            };
+
+            if (args.Values["oznameniTitleID"] != null) embedMessage.WithTitle(args.Values["oznameniTitleID"].ToString());
+            if (args.Values["oznameniDescID"] != null) embedMessage.WithDescription(args.Values["oznameniDescID"].ToString());
+            if (args.Values["oznameniThumbnailimgID"] != null) embedMessage.WithThumbnail(args.Values["oznameniThumbnailimgID"].ToString());
+            if (args.Values["oznameniBigimgID"] != null) embedMessage.WithImageUrl(args.Values["oznameniBigimgID"].ToString());
+
+            // Exit
+            var msg = new DiscordMessageBuilder().WithEmbed(embedMessage);
+            var sentMsg = await args.Interaction.Channel.SendMessageAsync(msg);
+            await args.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource ,new DiscordInteractionResponseBuilder().WithContent("Úspěšně jsi vytvořil oznámení " + sentMsg.JumpLink));
+            await Task.CompletedTask;
+        }
 
         //-------------------------------------------------------------------
         //                   Funkce: Přihlášky
