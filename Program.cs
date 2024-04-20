@@ -246,6 +246,7 @@ namespace Aeternum
             await DatabaseStartInitialize();
             await UpdateToDoDictionary();
             #endregion
+
             // Timer for periodic update Time on whitelist
             Timer timer = new Timer(TimeSpan.FromMinutes(1).TotalMilliseconds);
             timer.AutoReset = true;
@@ -565,10 +566,10 @@ namespace Aeternum
                     IconUrl = member.AvatarUrl,
                 }
             };
-            if (args.Values["changelogThumbnailimgID"] != null) { embedMessage.WithThumbnail(args.Values["changelogThumbnailimgID"]); }
-            if (args.Values["changelogBigimgID"] != null) { embedMessage.WithImageUrl(args.Values["changelogBigimgID"]); }
-            if (args.Values["changelogBeforeID"] != null) { embedMessage.AddField("Před", $"{args.Values["changelogBeforeID"]}", false); }
-            if (args.Values["changelogNowID"] != null) { embedMessage.AddField("Nyní", $"{args.Values["changelogNowID"]}", false); }
+            if (args.Values["changelogThumbnailimgID"] != null && args.Values["changelogThumbnailimgID"] != string.Empty) { embedMessage.WithThumbnail(args.Values["changelogThumbnailimgID"]); }
+            if (args.Values["changelogBigimgID"] != null && args.Values["changelogBigimgID"] != string.Empty) { embedMessage.WithImageUrl(args.Values["changelogBigimgID"]); }
+            if (args.Values["changelogBeforeID"] != null && args.Values["changelogBeforeID"] != string.Empty) { embedMessage.AddField("Před", $"{args.Values["changelogBeforeID"]}", false); }
+            if (args.Values["changelogNowID"] != null && args.Values["changelogNowID"] != string.Empty) { embedMessage.AddField("Nyní", $"{args.Values["changelogNowID"]}", false); }
 
             var msg = new DiscordMessageBuilder().WithEmbed(embedMessage);
 
@@ -674,9 +675,12 @@ namespace Aeternum
 
             embedMessage.AddField($"{ApproveEmoji} ({yesUsers.Count - 1})", yesUsersString, false);
             embedMessage.AddField($"{DisApproveEmoji} ({noUsers.Count - 1})", noUsersString, false);
+            embedMessage.AddField($"Vytvořená:", args.Message.CreationTimestamp.UtcDateTime.ToString(), true);
+            embedMessage.AddField($"Uzavřená:", DateTime.UtcNow.ToString(), true);
             embedMessage.Footer = new DiscordEmbedBuilder.EmbedFooter()
             {
-                Text = "Vytvořená přihláška: " + args.Message.CreationTimestamp.UtcDateTime.ToString()
+                IconUrl = args.Interaction.User.AvatarUrl,
+                Text = "Zkontroloval: " + args.Interaction.User.Username
             };
             await WhitelistArchiveChannel.SendMessageAsync(embedMessage);
             await args.Message.DeleteAsync();
@@ -744,9 +748,11 @@ namespace Aeternum
 
             embedMessage.AddField($"{ApproveEmoji} ({yesUsers.Count - 1})", yesUsersString, false);
             embedMessage.AddField($"{DisApproveEmoji} ({noUsers.Count - 1})", noUsersString, false);
+            embedMessage.AddField($"Vytvořená:", args.Message.CreationTimestamp.UtcDateTime.ToString(), true);
+            embedMessage.AddField($"Uzavřená:", DateTime.UtcNow.ToString(), true);
             embedMessage.Footer = new DiscordEmbedBuilder.EmbedFooter()
             {
-                Text = "Vytvořená přihláška: " + args.Message.CreationTimestamp.UtcDateTime.ToString()
+                Text = "Zkontrolováno Automaticky"
             };
             await WhitelistArchiveChannel.SendMessageAsync(embedMessage);
             await args.Message.DeleteAsync();
@@ -811,6 +817,8 @@ namespace Aeternum
         }
         public static async Task UpdateWhitelistTime(object sender, ElapsedEventArgs e)
         {
+            if (WhitelistChannel.GetMessagesAsync().Result.Count == 1) { await Task.CompletedTask; return; }
+
             var messages = WhitelistChannel.GetMessagesAsync().Result.Where(x => x.Embeds[0].Author != null).ToList();
             if (messages.Count == 0) return;
             foreach (var message in messages)
