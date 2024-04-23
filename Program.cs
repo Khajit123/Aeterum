@@ -214,7 +214,7 @@ namespace Aeternum
             Server = await client.GetGuildAsync(1193271233781956729);
 
 
-            client.Ready += Client_Ready;
+            client.GuildDownloadCompleted += Client_Ready;
             client.GuildMemberAdded += EmbedMemberAdd;
             client.GuildMemberRemoved += EmbedMemberRemove;
             client.MessageDeleted += OnMessageDelete;
@@ -223,6 +223,7 @@ namespace Aeternum
             client.ComponentInteractionCreated += OnButtonClick;
             client.ModalSubmitted += OnModalSubmit;
             client.MessageReactionAdded += OnReactionAdd;
+            client.UnknownEvent += MuteEvent;
 
             slashCommandsConfig.RegisterCommands<BasicSL>();
 
@@ -236,7 +237,7 @@ namespace Aeternum
         //-------------------------------------------------------------------
         //                   Event: Připraven Bot
         //-------------------------------------------------------------------
-        private static async Task Client_Ready(DiscordClient sender, ReadyEventArgs args)
+        private static async Task Client_Ready(DiscordClient sender, GuildDownloadCompletedEventArgs args)
         {
             #region Safe Initialize
             ApproveEmoji = GetEmojiFromName(":white_check_mark:").Result;
@@ -255,6 +256,11 @@ namespace Aeternum
 
 
             await Task.CompletedTask;
+        }
+        private static async Task MuteEvent(DiscordClient sender, UnknownEventArgs args)
+        {
+            await Task.CompletedTask;
+            return;
         }
 
         //-------------------------------------------------------------------
@@ -299,56 +305,40 @@ namespace Aeternum
             // To Do kanál
             if (args.Channel == ToDoChannel)
             {
-                var ToDoMessage = ToDoChannel.GetMessagesAsync().Result.Last();
+                var ToDoMessage = ToDoChannel.GetMessagesAsync(10).Result.Last();
                 string prefix = args.Message.Content.Split(' ')[0];
+
                 if (prefix == "+")
                 {
-                    ToDoList.Add(args.Message.Content.Substring(1));
-
-                    // Update
-                    await args.Message.DeleteAsync();
-                    var msg = new DiscordEmbedBuilder().WithTitle("To-Do Seznam").WithColor(DiscordColor.Aquamarine);
-                    for (int i = 0; i < ToDoList.Count; i++)
-                    {
-                        msg.AddField($"{i + 1}:", $"`{ToDoList[i]}`");
-                    }
-
-                    try
-                    {
-                        await ToDoMessage.ModifyAsync(new DiscordMessageBuilder().WithEmbed(msg));
-                    }
-                    catch { Console.WriteLine("Couldn't edit ToDo message"); }
-
-                    await Task.CompletedTask;
-                    return;
+                    ToDoList.Add(args.Message.Content.Substring(2));
                 }
                 else if (prefix == "-" && args.Message.Content.Split(' ')[1].All(char.IsDigit))
                 {
                     int index = Convert.ToInt16(args.Message.Content.Split(' ')[1]);
                     ToDoList.RemoveAt(index - 1);
+                }
+                else { await Task.CompletedTask; return; }
 
-                    // Update
-                    await args.Message.DeleteAsync();
-                    var msg = new DiscordEmbedBuilder().WithTitle("To-Do Seznam").WithColor(DiscordColor.Aquamarine);
-                    for (int i = 0; i < ToDoList.Count; i++)
-                    {
-                        msg.AddField($"{i + 1}:", $"`{ToDoList[i]}`");
-                    }
-
-                    try
-                    {
-                        await ToDoMessage.ModifyAsync(new DiscordMessageBuilder().WithEmbed(msg));
-                    }
-                    catch { Console.WriteLine("Couldn't edit ToDo message"); }
-
-                    await Task.CompletedTask;
-                    return;
+                // Update
+                var msg = new DiscordEmbedBuilder().WithTitle("To-Do Seznam").WithColor(DiscordColor.Aquamarine);
+                for (int i = 0; i < ToDoList.Count; i++)
+                {
+                    msg.AddField($"{i + 1}:", $"`{ToDoList[i]}`");
                 }
 
-                await args.Message.DeleteAsync();
+                try
+                {
+                    var messages = ToDoChannel.GetMessagesAsync(10).Result;
+                    foreach (var message in messages)
+                    {
+                        message.DeleteAsync().Wait();
+                    }
+                    await ToDoChannel.SendMessageAsync(new DiscordMessageBuilder().WithEmbed(msg));
+                }
+                catch { Console.WriteLine("Couldn't edit ToDo message"); }
+
                 await Task.CompletedTask;
                 return;
-
             }
 
             // Obrázky Serveru kanál
@@ -612,7 +602,7 @@ namespace Aeternum
         //-------------------------------------------------------------------
         //                   Funkce: Přihlášky
         //-------------------------------------------------------------------
-        // Click Button
+        // Manual Mode
         private static async Task WhitelistSuccess(ComponentInteractionCreateEventArgs args)
         {
             await SendMinecraftCommand($"whitelist add {args.Message.Embeds[0].Fields[0].Value}");
@@ -686,7 +676,7 @@ namespace Aeternum
             await args.Message.DeleteAsync();
             await Task.CompletedTask;
         }
-        // Automatic
+        // Automatic Mode
         private static async Task WhitelistSuccessAuto(ComponentCrtEventArgs args)
         {
             await WhitelistArchiveAuto(args, true);
@@ -1125,19 +1115,44 @@ namespace Aeternum
         }
         public static async Task UpdateToDoDictionary()
         {
-            DiscordMessage ToDoMessage = ToDoChannel.GetMessagesAsync().Result.Where(x => x.Author.IsBot == true).First();
+            DiscordMessage ToDoMessage = null;
+
+            try
+            {
+                ToDoMessage = ToDoChannel.GetMessagesAsync(10).Result.Where(x => x.Author.IsBot == true).ToList()[0];
+            }
+            catch
+            {
+                Console.WriteLine("Couldn't get to-do message creating one");
+            }
+
             if (ToDoMessage == null)
             {
+                Console.WriteLine("Is nul;l");
                 var msg = new DiscordEmbedBuilder().WithTitle("To-Do Seznam").WithColor(DiscordColor.Aquamarine);
                 for (int i = 0; i < ToDoList.Count; i++)
                 {
                     msg.AddField($"{i + 1}:", $"`{ToDoList[i]}`");
                 }
 
-                await ToDoChannel.SendMessageAsync(msg);
+                ToDoMessage = await ToDoChannel.SendMessageAsync(msg);
+                await Task.CompletedTask;
+                return;
             }
 
-            if (ToDoMessage.Embeds[0].Fields == null) { await Task.CompletedTask; return; }
+            //// Pokud není to-do list, udělat nový
+            //if (ToDoMessage == null)
+            //{
+            //    var msg = new DiscordEmbedBuilder().WithTitle("To-Do Seznam").WithColor(DiscordColor.Aquamarine);
+            //    for (int i = 0; i < ToDoList.Count; i++)
+            //    {
+            //        msg.AddField($"{i + 1}:", $"`{ToDoList[i]}`");
+            //    }
+
+            //    await ToDoChannel.SendMessageAsync(msg);
+            //}
+
+            if (ToDoMessage.Embeds[0].Fields.Count == 0) { await Task.CompletedTask; return; }
             ToDoList.Clear();
             for (int i = 0; i < ToDoMessage.Embeds[0].Fields.Count; i++)
             {
