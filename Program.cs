@@ -803,12 +803,11 @@ namespace Aeternum
         }
         public static async void VoidUpdater(object sender, ElapsedEventArgs e)
         {
+            if (WhitelistChannel.GetMessagesAsync(20).Result.Count == 1) { await Task.CompletedTask; return; }
             await UpdateWhitelistTime(sender, e);
         }
         public static async Task UpdateWhitelistTime(object sender, ElapsedEventArgs e)
         {
-            if (WhitelistChannel.GetMessagesAsync().Result.Count == 1) { await Task.CompletedTask; return; }
-
             var messages = WhitelistChannel.GetMessagesAsync().Result.Where(x => x.Embeds[0].Author != null).ToList();
             if (messages.Count == 0) return;
             foreach (var message in messages)
