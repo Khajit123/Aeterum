@@ -168,13 +168,13 @@ namespace Aeternum.Messages
                 var embed = new DiscordEmbedBuilder()
                 {
                     Color = DiscordColor.SpringGreen,
-                    Title = "Zvládl jsi to!",
-                    Description = "Tvá žádost o přidání na whitelist na Aeterum byla přijata.\r\n\r\nNež tě tam však přidám, chtěl jsem ještě předat nějaké to info, které se může hodit. \r\n\r\n- Již od tvého prvního připojení máš přístup k příkazu “/co i”, díky kterému zjistíš jakékoliv interakce s truhlami nebo blocky. Je to pro takový klid na duši, krádeže a nehlášené “vypůjčování” zde mají velice zřídkavý výskyt.\r\n\r\n- Po odehrání 100 hodin na serveru máš nárok na pozici hráče. Pokud si sami nevšimneme, neváhej nám dát vědět [odehraný čas na serveru najdeš v statistikách.] Tento rank nám slouží hlavně při rozhodování u dlouhodobější neaktivity, neaktivní hráči pak mají větší šanci zůstat na whitelistu. \r\n\r\n- Následně pokud každý měsíc odehraješ alespoň 15 hodin po získání ranku hráče, získáváš navíc privilegia rozhodovat o dění na serveru - hlasovat v přihláškách, anketách a podobně. Víc informací je potom přímo na discordu -> doporučuju alespoň koutkem oka projít. \r\n\r\nTo by mělo být to nejdůležitější, při jakékoliv otázce se neboj napsat, jsme tu téměř nonstop. Vítej na Orbisu 😊",
+                    Title = "Čauko, zase my",
+                    Description = "Neseme radostné zprávy! Zaujal jsi komunitu a velice rádi ti dáváme šanci se k nám přidat, teď už ti nic nebrání v připojení(IP): mc.aeterum.cz. Těšíme se na tebe :blush:",
                     Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail()
                     {
                         Url = Program.Server.IconUrl,
                     },
-                    ImageUrl = "https://www.icegif.com/wp-content/uploads/2023/10/icegif-170.gif",
+                    ImageUrl = "https://cdn.discordapp.com/attachments/1193271233781956732/1237686740060344341/Aeterum_banner.gif?ex=663c8d19&is=663b3b99&hm=dae8f2822b9e356e6376371b77e2451c7fa589683d663e81e63343d90a92a7b9&",
                     Footer = new DiscordEmbedBuilder.EmbedFooter()
                     {
                         Text = "Aeterum Team",
@@ -235,6 +235,35 @@ namespace Aeternum.Messages
         //--------------------------------------------------
         //                   Member
         // -------------------------------------------------
+        public static DiscordMessageBuilder member_Join
+        {
+            get
+            {
+                var embed = new DiscordEmbedBuilder()
+                {
+                    Color = DiscordColor.SpringGreen,
+                    Title = "Ahoj!",
+                    Description = "Vítejte na našem Minecraft serveru, ponoř se s námi do světa plného inovací a společenství! Všichni jsme vyrůstali na Vanille, ale  tentokrát volíme Slimefun, rozšíření, které přináší do hry nový rozměr s množstvím unikátních předmětů a strojů, které můžete tvořit a používat. Od základních nástrojů až po složité mechanické konstrukce, Aeterum otevírá dveře k nekonečným možnostem a zážitkům.\r\n\r" +
+                                  "Díky whitelistu se můžeš těšit také na naši komunitu, která je srdečná a přátelská, vždy připravená pomoci. Jsme prostě parta která se rozrostla v něco víc než jen občasné společné hraní.  Nic nás netěší víc, než když vidíme eventy, soutěže a společné projekty, které podporují týmového ducha. Připojte se k nám a staňte se součástí naší rostoucí komunity, kde každý den je dobrodružství!",
+                    Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail()
+                    {
+                        Url = Program.Server.IconUrl,
+                    },
+                    Footer = new DiscordEmbedBuilder.EmbedFooter()
+                    {
+                        Text = "Aeterum Team",
+                        IconUrl = Program.Server.IconUrl,
+                    }
+                };
+                var msg = new DiscordMessageBuilder()
+                {
+                    Embed = embed,
+                };
+
+                return msg;
+            }
+            private set { }
+        }
 
     }
 }

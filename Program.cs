@@ -475,6 +475,7 @@ namespace Aeternum
             embedMessage.AddField("Vytvoření účtů", args.Member.CreationTimestamp.ToString(), true);
 
             await UserLoggingChannel.SendMessageAsync(embed: embedMessage);
+            await SendDMMessage(args.Member, Messages.Default.member_Join);
             await Task.CompletedTask;
         }
         private static async Task EmbedMemberRemove(DiscordClient sender, GuildMemberRemoveEventArgs args)
