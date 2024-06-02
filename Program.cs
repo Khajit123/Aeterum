@@ -15,6 +15,7 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
@@ -272,17 +273,35 @@ namespace Aeternum
             bool IsAdmin = member.Roles.Contains(AdminRole);
             //bool IsWhitelisted = member.Roles.Contains(WhitelistedRole);
             bool IsNonWhitelisted = member.Roles.Contains(NonWhitelistedRole);
-            
 
-            if (args.Id == "btn_close_id" && IsAdmin)
+
+
+
+            if (args.Id == "btn_close_id" && IsAdmin) // Neprošel tlačítko u přihlášek
             {
-                await WhitelistArchive(args);
-                await Task.CompletedTask;
+                DiscordMessageBuilder msg = new DiscordMessageBuilder().WithContent($"Opravdu chceš uzavřít přihlášku hráče {args.Message.Embeds.First().Author.Name} jako **__NEPROŠEL?__**").AddComponents(CreateButtonComponent(ButtonStyle.Success, "second_btn_approve_id", "Ano", false, Btn_ApproveEmoji).Result, CreateButtonComponent(ButtonStyle.Danger, "second_btn_close_id", "Ne", false, Btn_DisApproveEmoji).Result);
+                var waitMSG = await args.Interaction.Channel.SendMessageAsync(msg);
+                var result = await waitMSG.WaitForButtonAsync(TimeSpan.FromSeconds(10));
+                if (!result.TimedOut && result.Result.Id == "second_btn_approve_id" && result.Result.Interaction.User.Id == args.Interaction.User.Id)
+                {
+                    await WhitelistArchive(args);
+                    await waitMSG.DeleteAsync();
+                    await Task.CompletedTask;
+                }
+                else { await waitMSG.DeleteAsync(); await Task.CompletedTask; }
             }
-            else if (args.Id == "btn_approve_id" && IsAdmin)
+            else if (args.Id == "btn_approve_id" && IsAdmin) // Prošel tlačítko u přihlášek
             {
-                await WhitelistSuccess(args);
-                await Task.CompletedTask;
+                DiscordMessageBuilder msg = new DiscordMessageBuilder().WithContent($"Opravdu chceš uzavřít přihlášku hráče {args.Message.Embeds.First().Author.Name} jako **__PROŠEL?__**").AddComponents(CreateButtonComponent(ButtonStyle.Success, "second_btn_approve_id", "Ano", false, Btn_ApproveEmoji).Result, CreateButtonComponent(ButtonStyle.Danger, "second_btn_close_id", "Ne", false, Btn_DisApproveEmoji).Result);
+                var waitMSG = await args.Interaction.Channel.SendMessageAsync(msg);
+                var result = await waitMSG.WaitForButtonAsync(TimeSpan.FromSeconds(10));
+                if (!result.TimedOut && result.Result.Id == "second_btn_approve_id" && result.Result.Interaction.User.Id == args.Interaction.User.Id)
+                {
+                    await WhitelistSuccess(args);
+                    await waitMSG.DeleteAsync();
+                    await Task.CompletedTask;
+                }
+                else { await waitMSG.DeleteAsync(); await Task.CompletedTask; }
             }
             else if (args.Id == "btn_create_whitelist" && IsNonWhitelisted)
             {
@@ -291,7 +310,8 @@ namespace Aeternum
             }
             else
             {
-                await Task.CompletedTask; 
+                await Task.CompletedTask;
+                return;
             }
 
 
@@ -383,11 +403,12 @@ namespace Aeternum
         }
         private static async Task OnMessageDelete(DiscordClient sender, MessageDeleteEventArgs args)
         {
-            if (args.Message.Channel == ToDoChannel || args.Message.Channel == ConsoleChannel || args.Message.Author.IsBot == true || (args.Message.MessageType != MessageType.Default && args.Message.MessageType != MessageType.Reply))
-            {
-                await Task.CompletedTask;
-                return;
-            }
+            if (args == null) { await Task.CompletedTask; return; }
+            if (args.Message.Author.IsBot) { await Task.CompletedTask; return; }
+            if (args.Message.Author.IsCurrent) { await Task.CompletedTask; return; }
+            if (args.Message.Channel == ToDoChannel) { await Task.CompletedTask; return; } 
+            if (args.Message.Channel == ConsoleChannel) { await Task.CompletedTask; return; } 
+            if (args.Message.MessageType != MessageType.Default && args.Message.MessageType != MessageType.Reply) { await Task.CompletedTask; return; }
 
             Dictionary<string, Stream> listOfFiles = new Dictionary<string, Stream>();
 
@@ -802,6 +823,56 @@ namespace Aeternum
             await UpdateDatabaseInts(new db_ints(Ints.WhitelistTotal, 1, false));
             await Task.CompletedTask;
         }
+        public static async Task RevokeWhitelist(DiscordMessage archivedWhitelist)
+        {
+            // Buttons
+            var approveButton = CreateButtonComponent(ButtonStyle.Success, "btn_approve_id", "Prošel", false, Btn_ApproveEmoji).Result;
+            var closeButton = CreateButtonComponent(ButtonStyle.Danger, "btn_close_id", "Neprošel", false, Btn_DisApproveEmoji).Result;
+
+            //Revoke info
+            var originalEmbed = archivedWhitelist.Embeds[0];
+            DiscordMember originalAuthor = Server.GetAllMembersAsync().Result.Where(x => x.Username == originalEmbed.Author.Name).First();
+
+            // Messages
+            var msg = new DiscordMessageBuilder()
+                    .WithContent(originalAuthor.Mention)
+                    .WithAllowedMentions(new IMention[] { new UserMention(originalAuthor) })
+                    .AddComponents(approveButton, closeButton);
+            var embedMessage = new DiscordEmbedBuilder
+            {
+                Color = new DiscordColor("89CFF0"),
+                Title = $"Přihláška #{WhitelistTotalCount}",
+                Author = new DiscordEmbedBuilder.EmbedAuthor
+                {
+                    Name = originalAuthor.Username,
+                    IconUrl = originalAuthor.AvatarUrl
+                },
+            };
+
+            for (int i = 0; i < originalEmbed.Fields.Count - 4; i++)// Add all fields but not last 4
+            {
+                embedMessage.AddField(originalEmbed.Fields[i].Name, originalEmbed.Fields[i].Value.ToString(), originalEmbed.Fields[i].Inline);
+            }
+
+            embedMessage.WithFooter("Zbývá: 2 dny 0 hodin 0 minut"); // Footer with timer
+            embedMessage.WithThumbnail("https://mc-heads.net/" + WhitelistThumbnailType + "/" + originalEmbed.Fields[0].Value); // Add Thumbnail with player skin by player nickname
+            msg.AddEmbed(embedMessage); // Add embed to tag username
+
+            // Exit
+            var sentMSG = await WhitelistChannel.SendMessageAsync(msg);
+            await sentMSG.CreateReactionAsync(ApproveEmoji); // Create :white_checked_approve: reaction
+            await sentMSG.CreateReactionAsync(DisApproveEmoji); // Create :x: reaction
+            if (originalEmbed.Color == DiscordColor.Green) { await UpdateDatabaseInts(new db_ints(Ints.WhitelistSuccess, WhitelistSuccessCount - 1, true)); } // If was success remove from database 1
+            else { await UpdateDatabaseInts(new db_ints(Ints.WhitelistFail, WhitelistFailCount - 1, true)); } // If was fail remove from database 1
+
+            await originalAuthor.RevokeRoleAsync(WhitelistedRole, "Odebrán z nedorozumnění");
+            await originalAuthor.GrantRoleAsync(NonWhitelistedRole, "Přidán z nedorozumnění");
+
+            await SendDMMessage(originalAuthor, Messages.Default.whitelist_Mistake_Revoking);
+            await archivedWhitelist.DeleteAsync();
+            await Task.CompletedTask;
+        }
+
         public static async void VoidUpdater(object sender, ElapsedEventArgs e)
         {
             if (WhitelistChannel.GetMessagesAsync(20).Result.Count == 1) { await Task.CompletedTask; return; }

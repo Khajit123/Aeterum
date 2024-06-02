@@ -454,5 +454,17 @@ namespace Aeternum.Commands.Slash
 
             await Task.CompletedTask;
         }
+
+        [ContextMenu(ApplicationCommandType.MessageContextMenu, "Obnovit přihlášku")]
+        [RequireUserPermissions(Permissions.Administrator)]
+        public async Task revokeWhitelist(ContextMenuContext ctx)
+        {
+            if (ctx.TargetMessage.Channel == Program.WhitelistArchiveChannel)
+            {
+                await Program.RevokeWhitelist(ctx.TargetMessage);
+
+                await Task.CompletedTask;
+            }
+        }
     }
 }

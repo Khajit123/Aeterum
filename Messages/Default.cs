@@ -231,6 +231,35 @@ namespace Aeternum.Messages
             }
             private set { }
         }
+        public static DiscordMessageBuilder whitelist_Mistake_Revoking
+        {
+            get
+            {
+                var embed = new DiscordEmbedBuilder()
+                {
+                    Color = DiscordColor.Yellow,
+                    Title = "Nastalo nedorozumnění!",
+                    Description = "Velice se celý team Aeterum omlouvá za toto malé nedorozumnění. Neúmyslně a předčasně se vyhodnotila tvá přihláška a jsem tedy nucen ti ji navrátit. Jako odškodné nabízíme 48 hlasovacích bodů jenž se rovná půl dne aktivnímu hlasování. Po přijetí na whitelist si stačí utvořit ticket v kategorii podpora a odškodné vyplatíme. Ještě jednou se velice omlouváme za nedorozumnění!",
+                    Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail()
+                    {
+                        Url = "https://upload.wikimedia.org/wikipedia/commons/2/2e/Exclamation_mark_red.png",
+                    },
+                    ImageUrl = Program.Server.IconUrl,
+                    Footer = new DiscordEmbedBuilder.EmbedFooter()
+                    {
+                        Text = "Aeterum Team",
+                        IconUrl = Program.Server.IconUrl,
+                    }
+                };
+                var msg = new DiscordMessageBuilder()
+                {
+                    Embed = embed,
+                };
+
+                return msg;
+            }
+            private set { }
+        }
 
         //--------------------------------------------------
         //                   Member
