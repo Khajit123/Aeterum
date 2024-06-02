@@ -810,7 +810,47 @@ namespace Aeternum
             embedMessage.AddField("Věk", args.Values["ageLabelID"], false);
             embedMessage.AddField("Jak ses o nás dozvěděl/a?", args.Values["knowDescID"], false);
             embedMessage.AddField("Co od serveru očekáváš?", args.Values["expectationDescID"], false);
-            embedMessage.AddField("Něco o sobě", args.Values["infoDescID"], false);
+
+            char[] contentArray = args.Values["infoDescID"].ToArray();
+            int first = 1;
+
+            if (contentArray.Length <= 1024) { embedMessage.AddField("Něco o sobě", args.Values["infoDescID"], false); }
+            else
+            {
+                string stopWhen = ".";
+                int currentCharPos;
+                while (contentArray.Length > 1024)
+                {
+                    currentCharPos = 1024;
+
+                    while (contentArray[currentCharPos].ToString() != stopWhen)
+                    {
+                        currentCharPos--;
+                        if (currentCharPos < 300) { stopWhen = string.Empty; currentCharPos = 1024; }
+                    }
+
+                    currentCharPos++;
+
+                    if (first == 1)
+                    {
+                        embedMessage.AddField("Něco o sobě", string.Join("", contentArray.Take(currentCharPos).ToArray()), false);
+                        first = 0;
+                    }
+                    else
+                    {
+                        embedMessage.AddField("|", string.Join("", contentArray.Take(currentCharPos).ToArray()), false);
+                    }
+                    contentArray = contentArray.Skip(currentCharPos).ToArray();
+
+                }
+
+                if (contentArray.Length <= 1024)
+                {
+                    embedMessage.AddField("|", string.Join("", contentArray), false);
+                }
+            }
+
+
             embedMessage.WithFooter("Zbývá: 2 dny 0 hodin 0 minut");
             embedMessage.WithThumbnail("https://mc-heads.net/" + WhitelistThumbnailType + "/" + args.Values["nicknameLabelID"]);
             msg.AddEmbed(embedMessage);
