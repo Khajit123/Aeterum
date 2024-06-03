@@ -921,7 +921,7 @@ namespace Aeternum
         public static async Task UpdateWhitelistTime(object sender, ElapsedEventArgs e)
         {
             var messages = WhitelistChannel.GetMessagesAsync().Result.Where(x => x.Embeds[0].Author != null).ToList();
-            if (messages.Count == 0) return;
+            if (messages.Count == 0) { await Task.CompletedTask; return; }
             foreach (var message in messages)
             {
                 var whitelistTime = message.Timestamp.DateTime.AddHours(48);
@@ -941,7 +941,7 @@ namespace Aeternum
                 if (days <= 0 && hours <= 0 && minutes <= 0)
                 {
                     timeFieldValue = "Čeká na schválení!";
-                    if (AutomateWhitelist == true)
+                    if (AutomateWhitelist)
                     {
                         var members = await GetMembersByRole(AdminRole);
                         int yesCount = message.GetReactionsAsync(DiscordEmoji.FromName(client, ":white_check_mark:", false), 30).Result.Count;
@@ -1009,19 +1009,18 @@ namespace Aeternum
                         _msg.AddEmbed(_embed);
                         _msg.WithContent(message.Content);
 
-                        var members = await GetMembersByRole(AdminRole);
-                        foreach (var member in members)
+                        DiscordMember[] members = await GetMembersByRole(AdminRole);
+ 
+                        if (message.Embeds.First().Footer.Text != "Čeká na schválení")
                         {
-                            var DMChannel = await member.CreateDmChannelAsync();
-                            try
+                            foreach (var member in members)
                             {
-                                if (DMChannel.GetMessagesAsync(5).Result.First().Content != message.Content)
+                                if (!member.IsBot)
                                 {
-                                    await DMChannel.SendMessageAsync(_msg);
+                                    await SendDMMessage(member, _msg);
                                     Console.WriteLine($"[INFO] - {member.Username} byla poslána zpráva whitelist_pending");
                                 }
                             }
-                            catch (Exception ex) { Console.WriteLine(ex); }
                         }
                     }
                 }
