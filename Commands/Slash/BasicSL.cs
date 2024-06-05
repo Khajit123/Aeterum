@@ -5,6 +5,7 @@ using DSharpPlus.Interactivity.Extensions;
 using DSharpPlus.SlashCommands;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace Aeternum.Commands.Slash
@@ -393,6 +394,64 @@ namespace Aeternum.Commands.Slash
         }
 
         //-------------------------------------------------------------------
+        //                   To-Do Seznam
+        //-------------------------------------------------------------------
+        [Category("ToDo")]
+        [SlashCommandGroup("todo", "To-Do")]
+        [RequireUserPermissions(Permissions.Administrator)]
+        public class ToDoGroupContainer
+        {
+            // ---------------------- Přidat ---------------------
+            [SlashCommand("přidat", "Přida zprávu do to-do listu")]
+            public async Task addToDo(InteractionContext ctx,
+                [Option("Zpráva", "Přidá zprávu do to-do listu")] string addText)
+            {
+
+                Program.ToDoList.Add(addText);
+                await Program.ToDoUpdate();
+
+                await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("Přidal jsi zprávu do to-do listu.").AsEphemeral(true));
+                await Task.CompletedTask;
+            }
+            // ---------------------- Odebrat ---------------------
+            [SlashCommand("odebrat", "Smaže zprávu z to-do list")]
+            public async Task removeToDo(InteractionContext ctx,
+                [Option("Index", "Odebere zprávu na pozici dle uvedeného indexu")] long index)
+            {
+
+                Program.ToDoList.RemoveAt((int)index - 1);
+                await Program.ToDoUpdate();
+
+                await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("Odebral jsi zprávu z to-do listu.").AsEphemeral(true));
+                await Task.CompletedTask;
+            }
+            // ---------------------- Hotovo ---------------------
+            [SlashCommand("hotovo", "Zaznačí zprávu v to-do listu škrtnutím. Pokud je zaškrtlá tak ji vratí do normálu")]
+            public async Task doneToDo(InteractionContext ctx,
+                [Option("Index", "Zaškrtne zprávu na uvedenem indexu jako hotová")] long index)
+            {
+
+                string ToDoText = Program.ToDoList[(int)index - 1];
+                bool formattedText = (string.Join(string.Empty, ToDoText.Take(2)) == "~~" ? true : false);
+                Program.ToDoList.RemoveAt((int)index - 1);
+                if (formattedText)
+                {
+                    Program.ToDoList.Insert((int)index - 1, ToDoText.TrimStart('~').TrimEnd('~'));
+                }
+                else
+                {
+                    Program.ToDoList.Insert((int)index - 1, $"~~{ToDoText}~~");
+                }
+                await Program.ToDoUpdate();
+
+                await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("Přepnul jsi stav hotovosti v to-do listu.").AsEphemeral(true));
+                await Task.CompletedTask;
+            }
+        }
+
+
+
+        //-------------------------------------------------------------------
         //                   Changelog
         //-------------------------------------------------------------------
         [SlashCommand("changelog", "Zpráva ohledně změn")]
@@ -444,8 +503,9 @@ namespace Aeternum.Commands.Slash
         }
 
         //-------------------------------------------------------------------
-        //                   Context Menu: Unlink Minecraft
+        //                   Context Menu
         //-------------------------------------------------------------------
+        // Unlink minecraft
         [ContextMenu(ApplicationCommandType.UserContextMenu, "Unlink Minecraft")]
         [RequireUserPermissions(Permissions.Administrator)]
         public async Task unlinkMC(ContextMenuContext ctx)
@@ -455,6 +515,7 @@ namespace Aeternum.Commands.Slash
             await Task.CompletedTask;
         }
 
+        // Obnovit přihlášku
         [ContextMenu(ApplicationCommandType.MessageContextMenu, "Obnovit přihlášku")]
         [RequireUserPermissions(Permissions.Administrator)]
         public async Task revokeWhitelist(ContextMenuContext ctx)

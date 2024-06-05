@@ -10,6 +10,7 @@ using DSharpPlus.SlashCommands;
 using Google.Protobuf.WellKnownTypes;
 using MySqlConnector;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
@@ -19,6 +20,7 @@ using System.Diagnostics.Metrics;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Net;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -183,7 +185,7 @@ namespace Aeternum
 
         // Other
         public static string WhitelistThumbnailType;
-        private static List<string> ToDoList = new List<string>();
+        public static List<string> ToDoList = new List<string>();
 
         //-------------------------------------------------------------------
         //                   Inicializace + Nastavování
@@ -246,7 +248,7 @@ namespace Aeternum
             Btn_ApproveEmoji = GetEmojiFromName(":heavy_check_mark:").Result;
             Btn_DisApproveEmoji = GetEmojiFromName(":heavy_multiplication_x:").Result;
             await DatabaseStartInitialize();
-            await UpdateToDoDictionary();
+            await SyncToDoDictionary();
             #endregion
 
             // Timer for periodic update Time on whitelist
@@ -254,7 +256,6 @@ namespace Aeternum
             timer.AutoReset = true;
             timer.Elapsed += new ElapsedEventHandler(VoidUpdater);
             timer.Start();
-
 
             await Task.CompletedTask;
         }
@@ -325,40 +326,7 @@ namespace Aeternum
             // To Do kanál
             if (args.Channel == ToDoChannel)
             {
-                var ToDoMessage = ToDoChannel.GetMessagesAsync(10).Result.Last();
-                string prefix = args.Message.Content.Split(' ')[0];
-
-                if (prefix == "+")
-                {
-                    ToDoList.Add(args.Message.Content.Substring(2));
-                }
-                else if (prefix == "-" && args.Message.Content.Split(' ')[1].All(char.IsDigit))
-                {
-                    int index = Convert.ToInt16(args.Message.Content.Split(' ')[1]);
-                    ToDoList.RemoveAt(index - 1);
-                }
-                else { await Task.CompletedTask; return; }
-
-                // Update
-                var msg = new DiscordEmbedBuilder().WithTitle("To-Do Seznam").WithColor(DiscordColor.Aquamarine);
-                for (int i = 0; i < ToDoList.Count; i++)
-                {
-                    msg.AddField($"{i + 1}:", $"`{ToDoList[i]}`");
-                }
-
-                try
-                {
-                    var messages = ToDoChannel.GetMessagesAsync(10).Result;
-                    foreach (var message in messages)
-                    {
-                        message.DeleteAsync().Wait();
-                    }
-                    await ToDoChannel.SendMessageAsync(new DiscordMessageBuilder().WithEmbed(msg));
-                }
-                catch { Console.WriteLine("Couldn't edit ToDo message"); }
-
-                await Task.CompletedTask;
-                return;
+                if (!args.Author.IsBot) { await args.Message.DeleteAsync(); }
             }
 
             // Obrázky Serveru kanál
@@ -622,6 +590,30 @@ namespace Aeternum
         }
 
         //-------------------------------------------------------------------
+        //                   Funkce: To-Do
+        //-------------------------------------------------------------------
+        public  static async Task ToDoUpdate()
+        {
+            var ToDoMessage = ToDoChannel.GetMessagesAsync(10).Result.FirstOrDefault();
+
+            // Update
+            var msg = new DiscordEmbedBuilder().WithTitle("To-Do Seznam").WithColor(DiscordColor.Aquamarine);
+            for (int i = 0; i < ToDoList.Count; i++)
+            {
+                string withoutCode = ToDoList[i].Replace("`", "");
+                msg.AddField($"{i + 1}:", $"{withoutCode}");
+            }
+
+            try
+            {
+                await ToDoMessage.ModifyAsync(new DiscordMessageBuilder().WithEmbed(msg));
+            }
+            catch { Console.WriteLine("Couldn't edit ToDo message"); }
+
+            await Task.CompletedTask;
+        }
+
+        //-------------------------------------------------------------------
         //                   Funkce: Přihlášky
         //-------------------------------------------------------------------
         // Manual Mode
@@ -852,7 +844,8 @@ namespace Aeternum
 
 
             embedMessage.WithFooter("Zbývá: 2 dny 0 hodin 0 minut");
-            embedMessage.WithThumbnail("https://mc-heads.net/" + WhitelistThumbnailType + "/" + args.Values["nicknameLabelID"]);
+            string playerUUID = await GetMinecraftUUIDByUsername(args.Values["nicknameLabelID"]);
+            embedMessage.WithThumbnail("https://mc-heads.net/" + WhitelistThumbnailType + "/" + playerUUID);
             msg.AddEmbed(embedMessage);
 
             // Exit
@@ -872,6 +865,7 @@ namespace Aeternum
             //Revoke info
             var originalEmbed = archivedWhitelist.Embeds[0];
             DiscordMember originalAuthor = Server.GetAllMembersAsync().Result.Where(x => x.Username == originalEmbed.Author.Name).First();
+            string originalNickname = originalEmbed.Fields.Where(x => x.Name == "Nickname").FirstOrDefault().Value;
 
             // Messages
             var msg = new DiscordMessageBuilder()
@@ -895,7 +889,8 @@ namespace Aeternum
             }
 
             embedMessage.WithFooter("Zbývá: 2 dny 0 hodin 0 minut"); // Footer with timer
-            embedMessage.WithThumbnail("https://mc-heads.net/" + WhitelistThumbnailType + "/" + originalEmbed.Fields[0].Value); // Add Thumbnail with player skin by player nickname
+            string playerUUID = await GetMinecraftUUIDByUsername(originalEmbed.Fields.FirstOrDefault().Value);
+            embedMessage.WithThumbnail("https://mc-heads.net/" + WhitelistThumbnailType + "/" + playerUUID); // Add Thumbnail with player skin by player nickname
             msg.AddEmbed(embedMessage); // Add embed to tag username
 
             // Exit
@@ -909,7 +904,9 @@ namespace Aeternum
             await originalAuthor.GrantRoleAsync(NonWhitelistedRole, "Přidán z nedorozumnění");
 
             await SendDMMessage(originalAuthor, Messages.Default.whitelist_Mistake_Revoking);
+            await SendMinecraftCommand("whitelist remove " + originalNickname);
             await archivedWhitelist.DeleteAsync();
+
             await Task.CompletedTask;
         }
 
@@ -1223,26 +1220,26 @@ namespace Aeternum
             }
             await Task.CompletedTask;
         }
-        public static async Task UpdateToDoDictionary()
+        public static async Task SyncToDoDictionary()
         {
             DiscordMessage ToDoMessage = null;
 
             try
             {
-                ToDoMessage = ToDoChannel.GetMessagesAsync(10).Result.Where(x => x.Author.IsBot == true).ToList()[0];
+                ToDoMessage = ToDoChannel.GetMessagesAsync(10).Result.Where(x => x.Author.IsBot == true).ToList().FirstOrDefault();
             }
             catch
             {
                 Console.WriteLine("Couldn't get to-do message creating one");
+                await Task.CompletedTask;
             }
 
             if (ToDoMessage == null)
             {
-                Console.WriteLine("Is nul;l");
                 var msg = new DiscordEmbedBuilder().WithTitle("To-Do Seznam").WithColor(DiscordColor.Aquamarine);
                 for (int i = 0; i < ToDoList.Count; i++)
                 {
-                    msg.AddField($"{i + 1}:", $"`{ToDoList[i]}`");
+                    msg.AddField($"{i + 1}:", $"{ToDoList[i]}");
                 }
 
                 ToDoMessage = await ToDoChannel.SendMessageAsync(msg);
@@ -1250,27 +1247,15 @@ namespace Aeternum
                 return;
             }
 
-            //// Pokud není to-do list, udělat nový
-            //if (ToDoMessage == null)
-            //{
-            //    var msg = new DiscordEmbedBuilder().WithTitle("To-Do Seznam").WithColor(DiscordColor.Aquamarine);
-            //    for (int i = 0; i < ToDoList.Count; i++)
-            //    {
-            //        msg.AddField($"{i + 1}:", $"`{ToDoList[i]}`");
-            //    }
-
-            //    await ToDoChannel.SendMessageAsync(msg);
-            //}
-
-            if (ToDoMessage.Embeds[0].Fields.Count == 0) { await Task.CompletedTask; return; }
+            if (ToDoMessage.Embeds.FirstOrDefault().Fields == null) { await Task.CompletedTask; return; }
             ToDoList.Clear();
-            for (int i = 0; i < ToDoMessage.Embeds[0].Fields.Count; i++)
+            for (int i = 0; i < ToDoMessage.Embeds.FirstOrDefault().Fields.Count; i++)
             {
-                ToDoList.Add(ToDoMessage.Embeds[0].Fields[i].Value);
+                string msg = ToDoMessage.Embeds.FirstOrDefault().Fields[i].Value;
+                ToDoList.Add(msg);
             }
 
             await Task.CompletedTask;
-            return;
         }
 
         // Components
@@ -1404,6 +1389,35 @@ namespace Aeternum
             {
                 Console.WriteLine($"({ex.Source}) - {ex.Message}");
                 return;
+            }
+        }
+
+        // Others
+        public static async Task<string> GetMinecraftUUIDByUsername(string username)
+        {
+            try
+            {
+                HttpWebRequest webReq = (HttpWebRequest)WebRequest.Create(string.Format("https://api.mojang.com/users/profiles/minecraft/" + username));
+                webReq.Method = "GET";
+
+                HttpWebResponse webResp = (HttpWebResponse)webReq.GetResponse();
+
+
+                string jsonString;
+                using (Stream stream = webResp.GetResponseStream())
+                {
+                    StreamReader reader = new StreamReader(stream, System.Text.Encoding.UTF8);
+                    jsonString = reader.ReadToEnd();
+                }
+
+                var jsonID = JObject.Parse(jsonString);
+                string userID = jsonID.GetValue("id").ToString();
+                return await Task.FromResult(userID);
+            }
+            catch (WebException ex)
+            {
+                Console.WriteLine("[ERROR] Couldn't get player UUID with this nickname: " + username + " - "+  ex.ToString());
+                return null;
             }
         }
 
