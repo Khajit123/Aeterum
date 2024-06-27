@@ -8,7 +8,9 @@ using DSharpPlus.Interactivity;
 using DSharpPlus.Interactivity.Extensions;
 using DSharpPlus.SlashCommands;
 using Google.Protobuf.WellKnownTypes;
+using Microsoft.Extensions.Logging;
 using MySqlConnector;
+using MySqlConnector.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
@@ -254,7 +256,7 @@ namespace Aeternum
             // Timer for periodic update Time on whitelist
             Timer timer = new Timer(TimeSpan.FromMinutes(1).TotalMilliseconds);
             timer.AutoReset = true;
-            timer.Elapsed += new ElapsedEventHandler(VoidUpdater);
+            timer.Elapsed += async (s, ev) => await VoidUpdater(s, ev);
             timer.Start();
 
             await Task.CompletedTask;
@@ -594,7 +596,9 @@ namespace Aeternum
         //-------------------------------------------------------------------
         public  static async Task ToDoUpdate()
         {
-            var ToDoMessage = ToDoChannel.GetMessagesAsync(10).Result.FirstOrDefault();
+            var toDoMessage = await GetFirstBotMessageAsync(ToDoChannel);
+
+            if (toDoMessage == null) { Console.WriteLine("Couldnt get to-do message"); return; }
 
             // Update
             var msg = new DiscordEmbedBuilder().WithTitle("To-Do Seznam").WithColor(DiscordColor.Aquamarine);
@@ -606,7 +610,7 @@ namespace Aeternum
 
             try
             {
-                await ToDoMessage.ModifyAsync(new DiscordMessageBuilder().WithEmbed(msg));
+                await toDoMessage.ModifyAsync(new DiscordMessageBuilder().WithEmbed(msg));
             }
             catch { Console.WriteLine("Couldn't edit ToDo message"); }
 
@@ -910,10 +914,47 @@ namespace Aeternum
             await Task.CompletedTask;
         }
 
-        public static async void VoidUpdater(object sender, ElapsedEventArgs e)
+        public static async Task VoidUpdater(object sender, ElapsedEventArgs e)
         {
-            if (WhitelistChannel.GetMessagesAsync(20).Result.Count == 1) { await Task.CompletedTask; return; }
-            await UpdateWhitelistTime(sender, e);
+            const int maxRetries = 3;
+            int retryCount = 0;
+
+            while (retryCount < maxRetries)
+            {
+                try
+                {
+                    var messages = await WhitelistChannel.GetMessagesAsync(20);
+
+                    if (messages.Count == 1)
+                    {
+                        await Task.CompletedTask;
+                        return;
+                    }
+
+                    await UpdateWhitelistTime(sender, e);
+                    break; // Exit the loop if successful
+                }
+                catch (DSharpPlus.Exceptions.ServerErrorException ex) when ((int)ex.HResult == 503)
+                {
+                    retryCount++;
+                    if (retryCount >= maxRetries)
+                    {
+                        // Log the error (consider using a logging framework)
+                        Console.WriteLine($"Failed to fetch messages after {maxRetries} attempts: {ex.Message}");
+                    }
+                    else
+                    {
+                        // Wait before retrying (e.g., exponential backoff)
+                        await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, retryCount)));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log other exceptions and handle them accordingly
+                    Console.WriteLine($"An unexpected error occurred: {ex.Message}");
+                    break;
+                }
+            }
         }
         public static async Task UpdateWhitelistTime(object sender, ElapsedEventArgs e)
         {
@@ -1301,6 +1342,11 @@ namespace Aeternum
                 Console.WriteLine($"({channelID}) - {ex.Message}");
                 return null;
             }
+        }
+        private static async Task<DiscordMessage> GetFirstBotMessageAsync(DiscordChannel channel, int limit = 10)
+        {
+            var messages = await channel.GetMessagesAsync(limit);
+            return messages.FirstOrDefault(x => x.Author.IsBot);
         }
 
         // Roles
