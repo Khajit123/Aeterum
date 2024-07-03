@@ -1,4 +1,5 @@
 ﻿using DSharpPlus;
+using DSharpPlus.CommandsNext;
 using DSharpPlus.CommandsNext.Attributes;
 using DSharpPlus.Entities;
 using DSharpPlus.Interactivity.Extensions;
@@ -404,11 +405,21 @@ namespace Aeternum.Commands.Slash
             // ---------------------- Přidat ---------------------
             [SlashCommand("přidat", "Přida zprávu do to-do listu")]
             public async Task addToDo(InteractionContext ctx,
-                [Option("Zpráva", "Přidá zprávu do to-do listu")] string addText)
+                [Option("Zpráva", "Přidá zprávu do to-do listu")] string addText,
+                [Option("Více", "Povolí více zpráv odděluj čárkou")] bool multiple = false)
             {
+                if (addText.Contains(',') && multiple)
+                {
+                    string[] splittedText = addText.Split(',');
+                    Program.ToDoList.AddRange(splittedText);
+                }
+                else
+                {
+                    Program.ToDoList.Add(addText);
+                }
 
-                Program.ToDoList.Add(addText);
                 await Program.ToDoUpdate();
+
 
                 await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("Přidal jsi zprávu do to-do listu.").AsEphemeral(true));
                 await Task.CompletedTask;
@@ -448,7 +459,6 @@ namespace Aeternum.Commands.Slash
                 await Task.CompletedTask;
             }
         }
-
 
 
         //-------------------------------------------------------------------
@@ -511,6 +521,8 @@ namespace Aeternum.Commands.Slash
         public async Task unlinkMC(ContextMenuContext ctx)
         {
             await Program.SendMinecraftCommand($"discordsrv unlink {ctx.TargetMember.Id}");
+            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder()
+                .WithContent($"unlinknul jsi Discord účet od Minecraft účtu hráči {ctx.TargetUser.Mention}.").AsEphemeral(true));
 
             await Task.CompletedTask;
         }
@@ -523,6 +535,8 @@ namespace Aeternum.Commands.Slash
             if (ctx.TargetMessage.Channel == Program.WhitelistArchiveChannel)
             {
                 await Program.RevokeWhitelist(ctx.TargetMessage);
+                await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder()
+                    .WithContent($"Obnovil jsi přihlášku hráči {ctx.TargetMessage.Content}").AsEphemeral(true));
 
                 await Task.CompletedTask;
             }

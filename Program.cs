@@ -4,6 +4,7 @@ using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
+using DSharpPlus.Exceptions;
 using DSharpPlus.Interactivity;
 using DSharpPlus.Interactivity.Extensions;
 using DSharpPlus.SlashCommands;
@@ -172,7 +173,7 @@ namespace Aeternum
         public static DiscordChannel ToDoChannel;
         public static DiscordChannel ServerImagesChannel;
         // Emojis
-        public static DiscordEmoji ApproveEmoji {  get; private set; }
+        public static DiscordEmoji ApproveEmoji { get; private set; }
         public static DiscordEmoji DisApproveEmoji { get; private set; }
         public static DiscordEmoji Btn_ApproveEmoji { get; private set; }
         public static DiscordEmoji Btn_DisApproveEmoji { get; private set; }
@@ -361,11 +362,11 @@ namespace Aeternum
             {
                 embedMessage.Footer = new DiscordEmbedBuilder.EmbedFooter { Text = args.Message.Author.Username, IconUrl = args.Message.Author.AvatarUrl };
             }
-                embedMessage.Author = new DiscordEmbedBuilder.EmbedAuthor { Name = "Upravená zpráva"};
-                embedMessage.AddField("Před úpravou", $"`{args.MessageBefore.Content}`");
-                embedMessage.AddField("Po úpravě", $"`{args.Message.Content}`");
-                embedMessage.AddField("Vytvořena", args.Message.CreationTimestamp.UtcDateTime.ToString(), true);
-                embedMessage.AddField("Upravená", DateTime.UtcNow.ToString(), true);
+            embedMessage.Author = new DiscordEmbedBuilder.EmbedAuthor { Name = "Upravená zpráva" };
+            embedMessage.AddField("Před úpravou", $"`{args.MessageBefore.Content}`");
+            embedMessage.AddField("Po úpravě", $"`{args.Message.Content}`");
+            embedMessage.AddField("Vytvořena", args.Message.CreationTimestamp.UtcDateTime.ToString(), true);
+            embedMessage.AddField("Upravená", DateTime.UtcNow.ToString(), true);
 
             await MessageLoggingChannel.SendMessageAsync(embed: embedMessage);
             await Task.CompletedTask;
@@ -376,8 +377,8 @@ namespace Aeternum
             if (args == null) { await Task.CompletedTask; return; }
             if (args.Message.Author.IsBot) { await Task.CompletedTask; return; }
             if (args.Message.Author.IsCurrent) { await Task.CompletedTask; return; }
-            if (args.Message.Channel == ToDoChannel) { await Task.CompletedTask; return; } 
-            if (args.Message.Channel == ConsoleChannel) { await Task.CompletedTask; return; } 
+            if (args.Message.Channel == ToDoChannel) { await Task.CompletedTask; return; }
+            if (args.Message.Channel == ConsoleChannel) { await Task.CompletedTask; return; }
             if (args.Message.MessageType != MessageType.Default && args.Message.MessageType != MessageType.Reply) { await Task.CompletedTask; return; }
 
             Dictionary<string, Stream> listOfFiles = new Dictionary<string, Stream>();
@@ -387,7 +388,7 @@ namespace Aeternum
                 Color = DiscordColor.IndianRed,
                 Description = $"`{args.Message.Content}`",
             };
-                embedMessage.Author = new DiscordEmbedBuilder.EmbedAuthor { Name = "Smazána Zpráva"};
+            embedMessage.Author = new DiscordEmbedBuilder.EmbedAuthor { Name = "Smazána Zpráva" };
             if (args.Message.Author != null)
             {
                 embedMessage.Footer = new DiscordEmbedBuilder.EmbedFooter { Text = args.Message.Author.Username, IconUrl = args.Message.Author.AvatarUrl };
@@ -587,34 +588,76 @@ namespace Aeternum
             // Exit
             var msg = new DiscordMessageBuilder().WithEmbed(embedMessage);
             var sentMsg = await args.Interaction.Channel.SendMessageAsync(msg);
-            await args.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource ,new DiscordInteractionResponseBuilder().WithContent("Úspěšně jsi vytvořil oznámení " + sentMsg.JumpLink));
+            await args.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("Úspěšně jsi vytvořil oznámení " + sentMsg.JumpLink));
             await Task.CompletedTask;
         }
 
         //-------------------------------------------------------------------
         //                   Funkce: To-Do
         //-------------------------------------------------------------------
-        public  static async Task ToDoUpdate()
+        public static async Task ToDoUpdate()
         {
             var toDoMessage = await GetFirstBotMessageAsync(ToDoChannel);
 
             if (toDoMessage == null) { Console.WriteLine("Couldnt get to-do message"); return; }
 
-            // Update
-            var msg = new DiscordEmbedBuilder().WithTitle("To-Do Seznam").WithColor(DiscordColor.Aquamarine);
-            for (int i = 0; i < ToDoList.Count; i++)
+            var msg = new DiscordMessageBuilder();
+
+            int neededEmbeds = ToDoList.Count / 25; // Kolik je zapotřebí embedu
+            if (ToDoList.Count % 25 > 0) neededEmbeds++; // Pokud je zbytek ve zlomku pričti jeden embed navíc
+
+            List<string> remainingToDos = new List<string>(ToDoList);
+            int ToDoPosCounter = 0;
+
+            for (int n = 0; n < neededEmbeds; n++) // Vytvoří embedy s 25 todo nebo zbytkem
             {
-                string withoutCode = ToDoList[i].Replace("`", "");
-                msg.AddField($"{i + 1}:", $"{withoutCode}");
+                var embedMsg = new DiscordEmbedBuilder().WithColor(DiscordColor.Aquamarine);
+                if (n == 0) embedMsg.WithTitle("To-Do Seznam");
+                for (int i = 0; i < 25 && remainingToDos.Count > 0; i++) // Ensure we don't exceed the list count
+                {
+                    ToDoPosCounter++;
+                    embedMsg.AddField($"{ToDoPosCounter}:", $"{remainingToDos[0]}");
+                    remainingToDos.RemoveAt(0);
+                }
+
+                msg.AddEmbed(embedMsg);
             }
 
-            try
+            bool messageUpdated = false;
+            int retryCount = 0;
+            const int maxRetries = 5; // Maximum number of retries
+
+            while (!messageUpdated && retryCount < maxRetries)
             {
-                await toDoMessage.ModifyAsync(new DiscordMessageBuilder().WithEmbed(msg));
+                try
+                {
+                    await toDoMessage.ModifyAsync(msg);
+                    messageUpdated = true;
+                }
+                catch (Exception ex)
+                {
+                    if (ex is RateLimitException || ex is UnauthorizedException || ex is BadRequestException)
+                    {
+                        retryCount++;
+                        int delay = (int)Math.Pow(2, retryCount); // Exponential backoff
+                        Console.WriteLine($"Rate limit hit or API error, retrying after {delay} seconds...");
+                        await Task.Delay(delay * 1000);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"An unexpected error occurred: {ex.Message}");
+                        break; // Break the loop on non-rate limit and non-API exceptions
+                    }
+                }
             }
-            catch { Console.WriteLine("Couldn't edit ToDo message"); }
+
+            if (!messageUpdated)
+            {
+                Console.WriteLine("Failed to update message after several retries.");
+            }
 
             await Task.CompletedTask;
+
         }
 
         //-------------------------------------------------------------------
