@@ -280,40 +280,89 @@ namespace Aeternum
 
 
 
-
             if (args.Id == "btn_close_id" && IsAdmin) // Neprošel tlačítko u přihlášek
             {
-                DiscordMessageBuilder msg = new DiscordMessageBuilder().WithContent($"Opravdu chceš uzavřít přihlášku hráče {args.Message.Embeds.First().Author.Name} jako **__NEPROŠEL?__**").AddComponents(CreateButtonComponent(ButtonStyle.Success, "second_btn_approve_id", "Ano", false, Btn_ApproveEmoji).Result, CreateButtonComponent(ButtonStyle.Danger, "second_btn_close_id", "Ne", false, Btn_DisApproveEmoji).Result);
-                var waitMSG = await args.Interaction.Channel.SendMessageAsync(msg);
+                #region MessageWithSecondApproval
+                var secondApprovalMessage = new DiscordMessageBuilder()
+                    .WithContent(args.Message.Content);
+                secondApprovalMessage.AddComponents(
+                    CreateButtonComponent(ButtonStyle.Success, "second_btn_approve_id", "Ano", false, Btn_ApproveEmoji).Result, 
+                    CreateButtonComponent(ButtonStyle.Danger, "second_btn_close_id", "Ne", false, Btn_DisApproveEmoji).Result);
+                secondApprovalMessage.AddEmbed(new DiscordEmbedBuilder(args.Message.Embeds[0]));
+                secondApprovalMessage.AddEmbed(new DiscordEmbedBuilder() { Color = DiscordColor.Red,Title = $"Opravdu chceš uzavřít přihlášku hráče {args.Message.Embeds.First().Author.Name} jako **__NEPROŠEL?__**", });
+                #endregion
+                #region MessageDefault
+                var defaultMessage = new DiscordMessageBuilder()
+                    .WithContent(args.Message.Content);
+                defaultMessage.AddComponents(
+                    CreateButtonComponent(ButtonStyle.Success, "btn_approve_id", "Prošel", false, Btn_ApproveEmoji).Result,
+                    CreateButtonComponent(ButtonStyle.Danger, "btn_close_id", "Neprošel", false, Btn_DisApproveEmoji).Result);
+                defaultMessage.AddEmbed(new DiscordEmbedBuilder(args.Message.Embeds[0]));
+                #endregion
+
+                await args.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
+                var waitMSG = await args.Message.ModifyAsync(secondApprovalMessage);
                 var result = await waitMSG.WaitForButtonAsync(TimeSpan.FromSeconds(10));
                 if (!result.TimedOut && result.Result.Id == "second_btn_approve_id" && result.Result.Interaction.User.Id == args.Interaction.User.Id)
                 {
                     await WhitelistArchive(args);
-                    await waitMSG.DeleteAsync();
+                    await args.Message.ModifyAsync(defaultMessage);
                     await Task.CompletedTask;
                 }
-                else { await waitMSG.DeleteAsync(); await Task.CompletedTask; }
+                else { await args.Message.ModifyAsync(defaultMessage); await Task.CompletedTask; }
             }
             else if (args.Id == "btn_approve_id" && IsAdmin) // Prošel tlačítko u přihlášek
             {
-                DiscordMessageBuilder msg = new DiscordMessageBuilder().WithContent($"Opravdu chceš uzavřít přihlášku hráče {args.Message.Embeds.First().Author.Name} jako **__PROŠEL?__**").AddComponents(CreateButtonComponent(ButtonStyle.Success, "second_btn_approve_id", "Ano", false, Btn_ApproveEmoji).Result, CreateButtonComponent(ButtonStyle.Danger, "second_btn_close_id", "Ne", false, Btn_DisApproveEmoji).Result);
-                var waitMSG = await args.Interaction.Channel.SendMessageAsync(msg);
+                #region MessageWithSecondApproval
+                var secondApprovalMessage = new DiscordMessageBuilder()
+                    .WithContent(args.Message.Content);
+                secondApprovalMessage.AddComponents(
+                    CreateButtonComponent(ButtonStyle.Success, "second_btn_approve_id", "Ano", false, Btn_ApproveEmoji).Result,
+                    CreateButtonComponent(ButtonStyle.Danger, "second_btn_close_id", "Ne", false, Btn_DisApproveEmoji).Result);
+                secondApprovalMessage.AddEmbed(new DiscordEmbedBuilder(args.Message.Embeds[0]));
+                secondApprovalMessage.AddEmbed(new DiscordEmbedBuilder() { Color = DiscordColor.Green,Title = $"Opravdu chceš uzavřít přihlášku hráče {args.Message.Embeds.First().Author.Name} jako **__PROŠEL?__**", });
+                #endregion
+                #region MessageDefault
+                var defaultMessage = new DiscordMessageBuilder()
+                    .WithContent(args.Message.Content);
+                defaultMessage.AddComponents(
+                    CreateButtonComponent(ButtonStyle.Success, "btn_approve_id", "Prošel", false, Btn_ApproveEmoji).Result,
+                    CreateButtonComponent(ButtonStyle.Danger, "btn_close_id", "Neprošel", false, Btn_DisApproveEmoji).Result);
+                defaultMessage.AddEmbed(new DiscordEmbedBuilder(args.Message.Embeds[0]));
+                #endregion
+
+                await args.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
+                var waitMSG = await args.Message.ModifyAsync(secondApprovalMessage);
                 var result = await waitMSG.WaitForButtonAsync(TimeSpan.FromSeconds(10));
                 if (!result.TimedOut && result.Result.Id == "second_btn_approve_id" && result.Result.Interaction.User.Id == args.Interaction.User.Id)
                 {
                     await WhitelistSuccess(args);
-                    await waitMSG.DeleteAsync();
+                    await args.Message.ModifyAsync(defaultMessage);
                     await Task.CompletedTask;
                 }
-                else { await waitMSG.DeleteAsync(); await Task.CompletedTask; }
+                else { await args.Message.ModifyAsync(defaultMessage); await Task.CompletedTask; }
             }
             else if (args.Id == "btn_create_whitelist" && IsNonWhitelisted)
             {
+                var messages = await WhitelistChannel.GetMessagesAsync();
+                foreach (var msg in messages) // Pokud už jednu přihlašká má tak zamítnout submit
+                {
+                    if (msg.MentionedUsers.Count > 0)
+                    {
+                        if (msg.MentionedUsers[0].Id == args.Interaction.User.Id)
+                        {
+                            await args.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("Již jednu přihlášku zde máš, počkej až skončí a pak si můžeš podat další " + msg.JumpLink).AsEphemeral(true));
+                            await Task.CompletedTask;
+                            return;
+                        }
+                    }
+                }
                 await WhitelistModal(args);
                 await Task.CompletedTask;
             }
             else
             {
+                await args.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
                 await Task.CompletedTask;
                 return;
             }
@@ -502,19 +551,6 @@ namespace Aeternum
             {
                 if (args.Interaction.Data.CustomId == "modal_whitelist")
                 {
-                    var messages = await WhitelistChannel.GetMessagesAsync();
-                    foreach (var msg in messages) // Pokud už jednu přihlašká má tak zamítnout submit
-                    {
-                        if (msg.MentionedUsers.Count > 0)
-                        {
-                            if (msg.MentionedUsers[0].Id == args.Interaction.User.Id)
-                            {
-                                await args.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("Již jednu přihlášku zde máš, počkej až skončí a pak si můžeš podat další " + msg.JumpLink).AsEphemeral(true));
-                                await Task.CompletedTask;
-                                return;
-                            }
-                        }
-                    }
                     await CreateWhitelist(args);
                 }
                 else if (args.Interaction.Data.CustomId == "modal_changelog")
