@@ -1,8 +1,6 @@
 ﻿using DSharpPlus;
-using DSharpPlus.CommandsNext;
 using DSharpPlus.CommandsNext.Attributes;
 using DSharpPlus.Entities;
-using DSharpPlus.Interactivity.Extensions;
 using DSharpPlus.SlashCommands;
 using System;
 using System.Collections.Generic;
@@ -27,8 +25,6 @@ namespace Aeternum.Commands.Slash
             [Option("autor", "Kdo bude jako autor ve zprávě")] DiscordUser autor = null,
             [Option("thumbnail", "Vlož obrázek zde, který se objeví v pravém horním rohu")] DiscordAttachment thumbnailIMG = null,
             [Option("bigImage", "Vlož obrázek zde, který bude ukázán ve zprávě")] DiscordAttachment textIMG = null)
-        //[Option("AddField", "Přidat Field (mezi popisek a bigImage/autor)")] bool fieldAdd = false,
-        //[Option("FieldCount", "Počet Fieldu")] long fieldCount = 0)
         {
             var msg = new DiscordMessageBuilder();
             var embedMessage = new DiscordEmbedBuilder
@@ -59,7 +55,7 @@ namespace Aeternum.Commands.Slash
                 return;
             }
             if (title != null) embedMessage.Title = title;
-            if (desc != null) embedMessage.Description = desc;
+            if (desc != null) embedMessage.Description = desc.Replace("\\n", "\n");
             if (role != null)
             {
                 msg.WithContent(role.Mention);
@@ -67,43 +63,6 @@ namespace Aeternum.Commands.Slash
             if (autor != null) embedMessage.WithFooter(autor.Username, autor.AvatarUrl);
             if (thumbnailIMG != null) { embedMessage.Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail { Url = thumbnailIMG.Url, }; }
             if (textIMG != null) { embedMessage.ImageUrl = textIMG.Url; }
-
-
-            //if (fieldAdd)
-            //{
-            //    for (int i = 0; i < fieldCount; i++)
-            //    {
-            //        string fieldtitle;
-            //        string fieldtext;
-            //        bool fieldinline;
-
-            //        await ctx.DeferAsync(true);
-            //        await ctx.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate, new DiscordInteractionResponseBuilder().WithContent($"Field #{i + 1} Napiš titulek"));
-            //        var resultTitle = await ctx.Channel.GetNextMessageAsync(m =>
-            //        {
-            //            return m.Author.Id == ctx.User.Id;
-            //        });
-            //        if (resultTitle.TimedOut) return;
-            //        fieldtitle = resultTitle.Result.Content;
-
-            //        await ctx.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate, new DiscordInteractionResponseBuilder().WithContent($"Field #{i + 1} Napiš popisek"));
-            //        var resultText = await ctx.Channel.GetNextMessageAsync(m =>
-            //        {
-            //            return m.Author.Id == ctx.User.Id;
-            //        });
-            //        if (resultText.TimedOut) return;
-            //        fieldtext = resultText.Result.Content;
-
-            //        await ctx.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate, new DiscordInteractionResponseBuilder().WithContent($"Field #{i + 1} Bude v jedné řadě? Napiš pouze true nebo false"));
-            //        var resultInline = await ctx.Channel.GetNextMessageAsync(m =>
-            //        {
-            //            return m.Author.Id == ctx.User.Id;
-            //        });
-            //        if (resultInline.TimedOut) return;
-            //        if (resultInline.Result.Content != "true" || resultInline.Result.Content != "false") return;
-            //        fieldinline = Convert.ToBoolean(resultInline.Result.Content);
-            //    }
-            //}
 
             await ctx.Channel.SendMessageAsync(msg.Content, embed: embedMessage);
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("Zpráva byla úspěšně vytvořena.").AsEphemeral(true));
@@ -271,7 +230,8 @@ namespace Aeternum.Commands.Slash
                 [Option("Console-Channel", "Konzole, kde se budou psát příkazy")] DiscordChannel ConsoleChannel = null,
                 [Option("Changelog-Channel", "Kde se budou psát changelog zprávy")] DiscordChannel ChangelogChannel = null,
                 [Option("ToDo-Channel", "Kde se budou psát To-Do zprávy")] DiscordChannel ToDoChannel = null,
-                [Option("ServerImages-Channel", "Kde budou jen obrázky Serveru")] DiscordChannel ServerImagesChannel = null)
+                [Option("ServerImages-Channel", "Kde budou jen obrázky Serveru")] DiscordChannel ServerImagesChannel = null,
+                [Option("DebugConsole-Channel", "Konzole, kde se budou ukazovat zprávy od bota")] DiscordChannel DebugConsoleChannel = null)
             {
                 List<Database.db_channel> channelsToChange = new List<Database.db_channel>();
                 if (UserLogging != null) { channelsToChange.Add(new Database.db_channel(Database.Channels.UserLogging, UserLogging.Id.ToString())); Program.UserLoggingChannel = UserLogging; }
@@ -282,6 +242,8 @@ namespace Aeternum.Commands.Slash
                 if (ChangelogChannel != null) { channelsToChange.Add(new Database.db_channel(Database.Channels.Changelog, ChangelogChannel.Id.ToString())); Program.ChangelogChannel = ChangelogChannel; }
                 if (ToDoChannel != null) { channelsToChange.Add(new Database.db_channel(Database.Channels.ToDo, ToDoChannel.Id.ToString())); Program.ToDoChannel = ToDoChannel; }
                 if (ServerImagesChannel != null) { channelsToChange.Add(new Database.db_channel(Database.Channels.ServerImages, ServerImagesChannel.Id.ToString())); Program.ServerImagesChannel = ServerImagesChannel; }
+                if (DebugConsoleChannel != null) { channelsToChange.Add(new Database.db_channel(Database.Channels.DebugConsole, DebugConsoleChannel.Id.ToString())); Program.DebugConsoleChannel = DebugConsoleChannel; }
+
 
                 if (channelsToChange.Count > 0) { await Program.UpdateDatabaseChannels(channelsToChange.ToArray()); }
 
@@ -523,7 +485,7 @@ namespace Aeternum.Commands.Slash
             await Program.SendMinecraftCommand($"discordsrv unlink {ctx.TargetMember.Id}");
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder()
                 .WithContent($"unlinknul jsi Discord účet od Minecraft účtu hráči {ctx.TargetUser.Mention}.").AsEphemeral(true));
-
+            await Program.DebugConsole($"Uživateli {ctx.TargetMember.Nickname} ({ctx.TargetMember.Id} byl unlinknut minecraft účet)");
             await Task.CompletedTask;
         }
 
@@ -537,7 +499,7 @@ namespace Aeternum.Commands.Slash
                 await Program.RevokeWhitelist(ctx.TargetMessage);
                 await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder()
                     .WithContent($"Obnovil jsi přihlášku hráči {ctx.TargetMessage.Content}").AsEphemeral(true));
-
+                await Program.DebugConsole($"Uživateli {ctx.TargetMessage.Content} byla obnovena přihláška)");
                 await Task.CompletedTask;
             }
         }

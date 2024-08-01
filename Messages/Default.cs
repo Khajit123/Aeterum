@@ -66,7 +66,7 @@ namespace Aeternum.Messages
                         Url = "https://openseauserdata.com/files/8e976123d4005649a085afa6abfeace4.gif",
                     },
                 };
-                var btn = new DiscordButtonComponent(ButtonStyle.Success, "btn_create_whitelist", "Vytvořit Přihlášku", false, new DiscordComponentEmoji(DiscordEmoji.FromName(Program.client, ":pencil:")));
+                var btn = new DiscordButtonComponent(ButtonStyle.Success, "btn_create_whitelist", "Vytvořit Přihlášku", false, new DiscordComponentEmoji(DiscordEmoji.FromName(Program.Client, ":pencil:")));
                 var msg = new DiscordMessageBuilder()
                 {
                     Embed = embed,

@@ -8,24 +8,16 @@ using DSharpPlus.Exceptions;
 using DSharpPlus.Interactivity;
 using DSharpPlus.Interactivity.Extensions;
 using DSharpPlus.SlashCommands;
-using Google.Protobuf.WellKnownTypes;
-using Microsoft.Extensions.Logging;
 using MySqlConnector;
-using MySqlConnector.Logging;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
-using System.Configuration;
 using System.Data;
-using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.IO;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Net;
 using System.Net.Http;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Timers;
@@ -44,7 +36,8 @@ namespace Aeternum
             Console,
             Changelog,
             ToDo,
-            ServerImages
+            ServerImages,
+            DebugConsole
         }
         public enum Roles
         {
@@ -139,6 +132,7 @@ namespace Aeternum
             connection = new MySqlConnection($"Server={db_Host};User ID={db_Username};Password={db_Password};Database={db_Name}");
             connection.Open();
             Console.WriteLine($"Připojeno k databázi {db_Name}...");
+            await Program.DebugConsole($"Připojeno k databázi {db_Name}...");
             return await Task.FromResult(connection);
         }
 
@@ -146,16 +140,17 @@ namespace Aeternum
         {
             connection.Close();
             Console.WriteLine("Odpojeno od databáze...");
+            await Program.DebugConsole($"Odpojeno od databáze...");
             await Task.CompletedTask;
         }
 
     }
 
-    internal class Program
+    internal static class Program
     {
         // First
-        public static DiscordClient client { get; private set; }
-        public static CommandsNextExtension commands { get; private set; }
+        public static DiscordClient Client { get; private set; }
+        public static CommandsNextExtension Commands { get; private set; }
         public static DiscordGuild Server { get; private set; }
 
         // Roles
@@ -172,6 +167,8 @@ namespace Aeternum
         public static DiscordChannel ChangelogChannel;
         public static DiscordChannel ToDoChannel;
         public static DiscordChannel ServerImagesChannel;
+        public static DiscordChannel DebugConsoleChannel;
+
         // Emojis
         public static DiscordEmoji ApproveEmoji { get; private set; }
         public static DiscordEmoji DisApproveEmoji { get; private set; }
@@ -189,6 +186,12 @@ namespace Aeternum
         // Other
         public static string WhitelistThumbnailType;
         public static List<string> ToDoList = new List<string>();
+        public enum DebugLevel
+        {
+            Info,
+            Warning,
+            Error
+        }
 
         //-------------------------------------------------------------------
         //                   Inicializace + Nastavování
@@ -205,37 +208,39 @@ namespace Aeternum
                 TokenType = TokenType.Bot,
                 AutoReconnect = true
             };
-            client = new DiscordClient(discordConfig);
-            var slashCommandsConfig = client.UseSlashCommands();
+            Client = new DiscordClient(discordConfig);
+            var slashCommandsConfig = Client.UseSlashCommands();
             var activity = new DiscordActivity()
             {
                 Name = "Tebe",
                 ActivityType = ActivityType.Watching
 
             };
-            client.UseInteractivity(new InteractivityConfiguration()
+            Client.UseInteractivity(new InteractivityConfiguration()
             {
                 Timeout = TimeSpan.FromMinutes(2)
             });
-            Server = await client.GetGuildAsync(1193271233781956729);
+            Server = await Client.GetGuildAsync(1193271233781956729);
 
 
-            client.GuildDownloadCompleted += Client_Ready;
-            client.GuildMemberAdded += EmbedMemberAdd;
-            client.GuildMemberRemoved += EmbedMemberRemove;
-            client.MessageDeleted += OnMessageDelete;
-            client.MessageUpdated += OnMessageEdit;
-            client.MessageCreated += OnMessageCreate;
-            client.ComponentInteractionCreated += OnButtonClick;
-            client.ModalSubmitted += OnModalSubmit;
-            client.MessageReactionAdded += OnReactionAdd;
-            client.UnknownEvent += MuteEvent;
-
+            Client.GuildDownloadCompleted += Client_Ready;
+            Client.GuildMemberAdded += EmbedMemberAdd;
+            Client.GuildMemberRemoved += EmbedMemberRemove;
+            Client.MessageDeleted += OnMessageDelete;
+            Client.MessageUpdated += OnMessageEdit;
+            Client.MessageCreated += OnMessageCreate;
+            Client.ComponentInteractionCreated += OnButtonClick;
+            Client.ModalSubmitted += OnModalSubmit;
+            Client.MessageReactionAdded += OnReactionAdd;
             slashCommandsConfig.RegisterCommands<BasicSL>();
 
 
-            await client.ConnectAsync(activity, UserStatus.Online);
+            await Client.ConnectAsync(activity, UserStatus.Online);
             await Task.Delay(-1);
+            try
+            {
+                await DebugConsoleChannel.SendMessageAsync(":octagonal_sign: **Aeterum bot byl zastaven nebo samovolně obnoven.**");
+            }catch{ };
         }
 
 
@@ -246,11 +251,11 @@ namespace Aeternum
         private static async Task Client_Ready(DiscordClient sender, GuildDownloadCompletedEventArgs args)
         {
             #region Safe Initialize
-            ApproveEmoji = GetEmojiFromName(":white_check_mark:").Result;
-            DisApproveEmoji = GetEmojiFromName(":x:").Result;
-            Btn_ApproveEmoji = GetEmojiFromName(":heavy_check_mark:").Result;
-            Btn_DisApproveEmoji = GetEmojiFromName(":heavy_multiplication_x:").Result;
-            await DatabaseStartInitialize();
+            ApproveEmoji = await GetEmojiFromName(":white_check_mark:");
+            DisApproveEmoji = await GetEmojiFromName(":x:");
+            Btn_ApproveEmoji = await GetEmojiFromName(":heavy_check_mark:");
+            Btn_DisApproveEmoji = await GetEmojiFromName(":heavy_multiplication_x:");
+            await LoadFromDatabase();
             await SyncToDoDictionary();
             #endregion
 
@@ -260,12 +265,12 @@ namespace Aeternum
             timer.Elapsed += async (s, ev) => await VoidUpdater(s, ev);
             timer.Start();
 
+            try 
+            {
+                await DebugConsoleChannel.SendMessageAsync(":white_check_mark: **Aeterum Bot byl uveden do provozu.**");
+            }
+            catch { }
             await Task.CompletedTask;
-        }
-        private static async Task MuteEvent(DiscordClient sender, UnknownEventArgs args)
-        {
-            await Task.CompletedTask;
-            return;
         }
 
         //-------------------------------------------------------------------
@@ -278,7 +283,7 @@ namespace Aeternum
             //bool IsWhitelisted = member.Roles.Contains(WhitelistedRole);
             bool IsNonWhitelisted = member.Roles.Contains(NonWhitelistedRole);
 
-
+            await DebugConsole($"Uživatel {args.User.Username} ({args.User.Id}) kliknul na tlačítko {args.Id}", DebugLevel.Warning);
 
             if (args.Id == "btn_close_id" && IsAdmin) // Neprošel tlačítko u přihlášek
             {
@@ -352,6 +357,7 @@ namespace Aeternum
                         if (msg.MentionedUsers[0].Id == args.Interaction.User.Id)
                         {
                             await args.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("Již jednu přihlášku zde máš, počkej až skončí a pak si můžeš podat další " + msg.JumpLink).AsEphemeral(true));
+                            await DebugConsole($"Uživatel {args.User} se pokusil vytvořit přihlášku, ačkoliv již má jednu aktivní", DebugLevel.Warning);
                             await Task.CompletedTask;
                             return;
                         }
@@ -378,7 +384,11 @@ namespace Aeternum
             // To Do kanál
             if (args.Channel == ToDoChannel)
             {
-                if (!args.Author.IsBot) { await args.Message.DeleteAsync(); }
+                if (!args.Author.IsBot) 
+                {
+                    await DebugConsole($"Uživatel {args.Author.Username} poslal zprávu, která mu byla smazána do kanálu {args.Channel.Name} s obsahem: {args.Message.Content}", DebugLevel.Warning); 
+                    await args.Message.DeleteAsync(); 
+                }
             }
 
             // Obrázky Serveru kanál
@@ -389,6 +399,7 @@ namespace Aeternum
                     .WithTitle("Smazána zpráva")
                     .WithColor(DiscordColor.Red)
                     .WithDescription(args.Message.Content)));
+                await DebugConsole($"Uživatel {args.Author.Username} poslal zprávu, která mu byla smazána do kanálu {args.Channel.Name} s obsahem: {args.Message.Content}", DebugLevel.Warning);
                 await args.Message.DeleteAsync();
             }
 
@@ -486,6 +497,7 @@ namespace Aeternum
                 {
                     await args.Message.DeleteReactionAsync(args.Emoji, args.User);
                     await SendDMMessage(args.User, Messages.Default.warning_Reaction);
+                    await DebugConsole($"Uživatel {args.User} reagoval na zprávu v kanálu {args.Channel.Name} a neměl dostatečné oprávnění na to", DebugLevel.Warning);
                 }
             }
 
@@ -549,6 +561,8 @@ namespace Aeternum
         {
             if (args.Interaction.Type == InteractionType.ModalSubmit)
             {
+                await DebugConsole($"Uživatel {args.Interaction.User} odeslal modal s id: {args.Interaction.Data.CustomId}");
+
                 if (args.Interaction.Data.CustomId == "modal_whitelist")
                 {
                     await CreateWhitelist(args);
@@ -633,9 +647,9 @@ namespace Aeternum
         //-------------------------------------------------------------------
         public static async Task ToDoUpdate()
         {
-            var toDoMessage = await GetFirstBotMessageAsync(ToDoChannel);
+            var toDoMessage = await GetLastBotMessageAsync(ToDoChannel);
 
-            if (toDoMessage == null) { Console.WriteLine("Couldnt get to-do message"); return; }
+            if (toDoMessage == null) { Console.WriteLine("Couldnt get to-do message"); await DebugConsole("Nepodařilo se získat to-do zprávu", DebugLevel.Error); return; }
 
             var msg = new DiscordMessageBuilder();
 
@@ -677,11 +691,13 @@ namespace Aeternum
                         retryCount++;
                         int delay = (int)Math.Pow(2, retryCount); // Exponential backoff
                         Console.WriteLine($"Rate limit hit or API error, retrying after {delay} seconds...");
+                        await DebugConsole($"Rate limit hit or API error, retrying after {delay} seconds...", DebugLevel.Warning);
                         await Task.Delay(delay * 1000);
                     }
                     else
                     {
                         Console.WriteLine($"An unexpected error occurred: {ex.Message}");
+                        await DebugConsole($"An unexpected error occurred: {ex.Message}", DebugLevel.Error);
                         break; // Break the loop on non-rate limit and non-API exceptions
                     }
                 }
@@ -690,6 +706,7 @@ namespace Aeternum
             if (!messageUpdated)
             {
                 Console.WriteLine("Failed to update message after several retries.");
+                await DebugConsole("Failed to update message after several retries.", DebugLevel.Error);
             }
 
             await Task.CompletedTask;
@@ -990,6 +1007,7 @@ namespace Aeternum
             await SendMinecraftCommand("whitelist remove " + originalNickname);
             await archivedWhitelist.DeleteAsync();
 
+
             await Task.CompletedTask;
         }
 
@@ -1020,6 +1038,7 @@ namespace Aeternum
                     {
                         // Log the error (consider using a logging framework)
                         Console.WriteLine($"Failed to fetch messages after {maxRetries} attempts: {ex.Message}");
+                        await DebugConsole($"Failed to fetch messages after {maxRetries} attempts: {ex.Message}");
                     }
                     else
                     {
@@ -1031,6 +1050,7 @@ namespace Aeternum
                 {
                     // Log other exceptions and handle them accordingly
                     Console.WriteLine($"An unexpected error occurred: {ex.Message}");
+                    await DebugConsole($"An unexpected error occurred: {ex.Message}", DebugLevel.Error);
                     break;
                 }
             }
@@ -1061,8 +1081,8 @@ namespace Aeternum
                     if (AutomateWhitelist)
                     {
                         var members = await GetMembersByRole(AdminRole);
-                        int yesCount = message.GetReactionsAsync(DiscordEmoji.FromName(client, ":white_check_mark:", false), 30).Result.Count;
-                        int noCount = message.GetReactionsAsync(DiscordEmoji.FromName(client, ":x:", false), 30).Result.Count;
+                        int yesCount = message.GetReactionsAsync(DiscordEmoji.FromName(Client, ":white_check_mark:", false), 30).Result.Count;
+                        int noCount = message.GetReactionsAsync(DiscordEmoji.FromName(Client, ":x:", false), 30).Result.Count;
                         if (yesCount > noCount)
                         {
                             await WhitelistSuccessAuto(new ComponentCrtEventArgs(message));
@@ -1136,6 +1156,7 @@ namespace Aeternum
                                 {
                                     await SendDMMessage(member, _msg);
                                     Console.WriteLine($"[INFO] - {member.Username} byla poslána zpráva whitelist_pending");
+                                    await DebugConsole($"{member.Username} byla poslána zpráva whitelist_pending");
                                 }
                             }
                         }
@@ -1179,7 +1200,11 @@ namespace Aeternum
         //-------------------------------------------------------------------
         //                   Funkce: Util
         //-------------------------------------------------------------------
-        public static async Task DatabaseStartInitialize()
+        
+        //
+        // Souhrn: 
+        //      Načte z databáze data a přepíše je
+        public static async Task LoadFromDatabase()
         {
             StringBuilder infoSB = new StringBuilder();
             try
@@ -1238,6 +1263,12 @@ namespace Aeternum
                             ServerImagesChannel = GetChannelFromID(channel_reader["ServerImages"].ToString()).Result;
                             infoSB.AppendLine($"ServerImagesChannel - {ServerImagesChannel.Name} ({ServerImagesChannel.Id})");
                         } catch { infoSB.AppendLine("ServerImagesChannel - couldnt be set"); }
+                        try
+                        {
+                            DebugConsoleChannel = GetChannelFromID(channel_reader["DebugConsole"].ToString()).Result;
+                            infoSB.AppendLine($"DebugConsole - {DebugConsoleChannel.Name} ({DebugConsoleChannel.Id})");
+                        }
+                        catch { infoSB.AppendLine("DebugConsole - couldnt be set"); }
                     }
                     channel_reader.Close();
                 }
@@ -1252,7 +1283,7 @@ namespace Aeternum
                             AdminRole = GetRoleFromID(roles_reader["Admin"].ToString()).Result;
                             infoSB.AppendLine($"AdminRole - {AdminRole.Name} ({AdminRole.Id})");
                         }
-                        catch (Exception ex ) { infoSB.AppendLine($"AdminRole - couldnt be set"); Console.WriteLine(ex.Message); }
+                        catch (Exception ex ) { infoSB.AppendLine($"AdminRole - couldnt be set"); Console.WriteLine(ex.Message); await DebugConsole(ex.Message); }
                         try
                         {
                             WhitelistedRole = GetRoleFromID(roles_reader["Whitelisted"].ToString()).Result;
@@ -1307,7 +1338,7 @@ namespace Aeternum
                             AutomateWhitelist = bool.Parse(booleans_reader["AutomateWhitelist"].ToString());
                             infoSB.AppendLine($"AutomateWhitelist - {AutomateWhitelist}");
                         }
-                        catch (Exception ex) { infoSB.AppendLine($"AutomateWhitelist - couldnt be set"); Console.WriteLine(ex.Message); }
+                        catch (Exception ex) { infoSB.AppendLine($"AutomateWhitelist - couldnt be set"); Console.WriteLine(ex.Message); await DebugConsole(ex.Message, DebugLevel.Error); }
                     }
                     booleans_reader.Close();
                 }
@@ -1322,7 +1353,7 @@ namespace Aeternum
                             WhitelistThumbnailType = other_reader["WhitelistThumbnailType"].ToString();
                             infoSB.AppendLine($"WhitelistThumbnailType - {WhitelistThumbnailType}");
                         }
-                        catch (Exception ex) { infoSB.AppendLine($"WhitelistThumbnailType - couldnt be set"); Console.WriteLine(ex.Message); }
+                        catch (Exception ex) { infoSB.AppendLine($"WhitelistThumbnailType - couldnt be set"); Console.WriteLine(ex.Message); await DebugConsole(ex.Message, DebugLevel.Error); }
                     }
                     other_reader.Close();
                 }
@@ -1331,11 +1362,13 @@ namespace Aeternum
             catch ( Exception ex)
             {
                 Console.WriteLine(ex.Message);
+                await DebugConsole(ex.Message, DebugLevel.Error);
             }
             finally 
             {
                 await Database.Disconnect();
                 Console.WriteLine(infoSB.ToString());
+                await DebugConsole(infoSB.ToString());
 
             }
             await Task.CompletedTask;
@@ -1351,6 +1384,7 @@ namespace Aeternum
             catch
             {
                 Console.WriteLine("Couldn't get to-do message creating one");
+                await DebugConsole("Nepodařilo se získat to-do zprávu, vytvářím novou", DebugLevel.Warning);
                 await Task.CompletedTask;
             }
 
@@ -1378,7 +1412,9 @@ namespace Aeternum
             await Task.CompletedTask;
         }
 
-        // Components
+        //
+        // Souhrn: 
+        //      Jednoduché tvoření tlačítek
         public static async Task<DiscordButtonComponent> CreateButtonComponent(ButtonStyle style, string customID, string buttonText, bool disabled = false, DiscordEmoji emoji = null)
         {
             try
@@ -1389,46 +1425,69 @@ namespace Aeternum
             catch (Exception ex)
             {
                 Console.WriteLine($"({ex.Source}) - {ex.Message}");
+                await DebugConsole($"({ex.Source}) - {ex.Message}", DebugLevel.Error);
                 return null;
             }
         }
 
-        // Emoji
+        //
+        // Souhrn: 
+        //      Jednoduché načtení emoji podle jména
         public static async Task<DiscordEmoji> GetEmojiFromName(string emojiName)
         {
             try
             {
-                var emoji = DiscordEmoji.FromName(client, emojiName);
+                var emoji = DiscordEmoji.FromName(Client, emojiName);
                 return await Task.FromResult(emoji);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"({ex.Source}) - {ex.Message}");
+                await DebugConsole($"(Nepodařilo se získat emoji {emojiName}", DebugLevel.Error);
                 return null;
             }
         }
 
-        // Channels
+        //
+        // Souhrn: 
+        //      Jednoduché načtení kanálu podle ID
         public static async Task<DiscordChannel> GetChannelFromID(string channelID)
         {
             try
             {
-                DiscordChannel channel = client.GetChannelAsync(Convert.ToUInt64(channelID)).Result;
+                DiscordChannel channel = Client.GetChannelAsync(Convert.ToUInt64(channelID)).Result;
                 return await Task.FromResult(channel);
             }
             catch (Exception ex) 
             {
                 Console.WriteLine($"({channelID}) - {ex.Message}");
+                await DebugConsole($"Nepodařilo se získat kanál s Id: {channelID}", DebugLevel.Error);
                 return null;
             }
         }
-        private static async Task<DiscordMessage> GetFirstBotMessageAsync(DiscordChannel channel, int limit = 10)
+
+        //
+        // Souhrn: 
+        //      Vrátí poslední zprávu v kanálu od aktuálního bota
+        public static async Task<DiscordMessage> GetLastBotMessageAsync(DiscordChannel channel, int limit = 10)
         {
-            var messages = await channel.GetMessagesAsync(limit);
-            return messages.FirstOrDefault(x => x.Author.IsBot);
+            try
+            {
+                var messages = await channel.GetMessagesAsync(limit);
+                if (messages.Count == 0) { return null; }
+                return messages.First(x => x.Author.IsBot);
+            }
+            catch
+            {
+                Console.WriteLine("Nepodařilo se najít poslední zprávu od bota");
+                await DebugConsole($"Nepodařilo se najít poslední zprávu od bota v kanálu: {channel.Name} ({channel.Id}), bylo zkontrolováno {limit} zpráv");
+                return null;
+            }
         }
 
-        // Roles
+        //
+        // Souhrn: 
+        //      Jednoduché načtení role podle ID
         public static async Task<DiscordRole> GetRoleFromID(string roleID)
         {
             try
@@ -1439,9 +1498,14 @@ namespace Aeternum
             catch(Exception ex)
             {
                 Console.WriteLine($"({roleID}) - {ex.Message}");
+                await DebugConsole($"Nepodařilo se získat roli s Id: {roleID}", DebugLevel.Error);
                 return null;
             }
         }
+
+        //
+        // Souhrn: 
+        //      Vrátí všechny uživatelé podle role
         public static async Task<DiscordMember[]> GetMembersByRole(DiscordRole role)
         {
             try
@@ -1452,9 +1516,14 @@ namespace Aeternum
             catch (Exception ex)
             {
                 Console.WriteLine($"({ex.Source}) - {ex.Message}");
+                await DebugConsole($"Nepodařilo se získat Serverové Uživatele kteří mají roli: {role.Name} ({role.Id})", DebugLevel.Error);
                 return null;
             }
         }
+
+        //
+        // Souhrn: 
+        //      Vrátí Server Uživatele z Uživatele
         public static async Task<DiscordMember> GetMemberFromUser(DiscordUser user)
         {
             try
@@ -1465,11 +1534,14 @@ namespace Aeternum
             catch (Exception ex)
             {
                 Console.WriteLine($"({ex.Source}) - {ex.Message}");
+                await DebugConsole($"Nepodařilo se získat Serverového Uživatele za pomocí uživatele: {user.Username} ({user.Id})", DebugLevel.Error);
                 return null;
             }
         }
 
-        // Minecraft Command
+        //
+        // Souhrn: 
+        //      Pošle minecraft příkaz (bez /)
         public static async Task SendMinecraftCommand(string command)
         {
             try
@@ -1479,10 +1551,13 @@ namespace Aeternum
             catch
             {
                 Console.WriteLine($"Could not send /{command}");
+                await DebugConsole($"Nepodařilo se odeslat příkaz do minecraftu /{command}", DebugLevel.Error);
             }
         }
 
-        // Send DM Message
+        //
+        // Souhrn: 
+        //      Pošle soukromou zprávu Server Uživateli / Uživateli
         public static async Task SendDMMessage(DiscordMember member, DiscordMessageBuilder message)
         {
             try
@@ -1496,6 +1571,7 @@ namespace Aeternum
             catch (Exception ex)
             {
                 Console.WriteLine($"({ex.Source}) - {ex.Message}");
+                await DebugConsole($"Nepodařilo se odeslat soukromou zprávu Serverovému Uživateli: {member.Username} ({member.Id} s obsahem: {message.Content})", DebugLevel.Error);
                 return;
             }
         }
@@ -1513,11 +1589,14 @@ namespace Aeternum
             catch (Exception ex)
             {
                 Console.WriteLine($"({ex.Source}) - {ex.Message}");
+                await DebugConsole($"Nepodařilo se odeslat soukromou zprávu uživateli: {user.Username} ({user.Id} s obsahem: {message.Content})", DebugLevel.Error);
                 return;
             }
         }
 
-        // Others
+        //
+        // Souhrn: 
+        //      Vrátí minecraft UUID podle minecraft nickname
         public static async Task<string> GetMinecraftUUIDByUsername(string username)
         {
             try
@@ -1542,11 +1621,49 @@ namespace Aeternum
             catch (WebException ex)
             {
                 Console.WriteLine("[ERROR] Couldn't get player UUID with this nickname: " + username + " - "+  ex.ToString());
+                await DebugConsole($"Nepodařilo se získat UUID minecraft hráče s jeho přezdívkou: {username} - {ex.Message}", DebugLevel.Error);
                 return null;
             }
         }
 
-        // Dabatase Management
+        //
+        // Souhrn: 
+        //      Pošle záznam do DebugLog kanálu na discordu
+        public static async Task DebugConsole(string text, DebugLevel debugType = DebugLevel.Info)
+        {
+            try
+            {
+                string prefix = "  ";
+                if (debugType == DebugLevel.Info) { prefix = "  "; }
+                else if (debugType == DebugLevel.Warning) { prefix = "! "; }
+                else if (debugType == DebugLevel.Error) { prefix = "- "; }
+
+                string currentTime = DateTime.Now.ToString("dddd, dd MMMM yyyy HH:mm:ss");
+                string formattedText = $"{prefix}[{currentTime}] [{debugType.ToString()}] - {text}";
+
+                DiscordMessage lastMessage = await GetLastBotMessageAsync(DebugConsoleChannel);
+
+                if (lastMessage != null && ((lastMessage.Content.Length + formattedText.Length) < 2000))
+                {
+                    string fixedLastMessage = lastMessage.Content.Trim('`').Replace("diff", "");
+                    string newMessage = $"```diff{Environment.NewLine}{fixedLastMessage}{Environment.NewLine}{formattedText}```";
+                    await lastMessage.ModifyAsync(newMessage);
+                }
+                else
+                {
+                    string newMessage = $"```diff{Environment.NewLine}{formattedText}```";
+                    await DebugConsoleChannel.SendMessageAsync(newMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Nepodařilo se odeslat zprávu do debug konzole - {ex.Message}");
+            }
+        }
+
+        //
+        // Souhrn: 
+        //      Aktualizuje databázi
         public static async Task UpdateDatabaseChannels(params db_channel[] CurrentChannels)
         {
             MySqlConnection conn = Database.Connect().Result;
@@ -1557,13 +1674,15 @@ namespace Aeternum
                     var cmd = new MySqlCommand($"UPDATE Channels SET {current.type} = {current.id}", conn);
                     cmd.ExecuteNonQuery();
                     Console.WriteLine($"Updated channel {current.type} with ID: {current.id}");
+                    await DebugConsole($"Aktualizován kanál {current.type} s hodnotou: {current.id}");
                 }
                 catch
                 {
                     Console.WriteLine($"Couldnt update {current.type} channels in database with value: {current.id}");
+                    await DebugConsole($"Nepodařilo se aktualizovat kanál {current.type} v databázi hodnotou: {current.id}", DebugLevel.Error);
                 }
             }
-            Database.Disconnect().Wait();
+            await Database.Disconnect();
             await Task.CompletedTask;
         }
         public static async Task UpdateDatabaseInts(params db_ints[] currentInts)
@@ -1580,6 +1699,7 @@ namespace Aeternum
                         var cmd = new MySqlCommand($"UPDATE Ints SET WhitelistTotal = {WhitelistTotalCount}", conn);
                         cmd.ExecuteNonQuery();
                         Console.WriteLine($"Updated Int {current.type} is now: {WhitelistTotalCount}");
+                        await DebugConsole($"Aktualizováná hodnota {current.type} na: {WhitelistTotalCount}");
                     }
                     else if (current.type == Ints.WhitelistSuccess)
                     {
@@ -1588,6 +1708,7 @@ namespace Aeternum
                         var cmd = new MySqlCommand($"UPDATE Ints SET WhitelistSuccess = {WhitelistSuccessCount}", conn);
                         cmd.ExecuteNonQuery();
                         Console.WriteLine($"Updated Int {current.type} is now: {WhitelistSuccessCount}");
+                        await DebugConsole($"Aktualizováná hodnota {current.type} na: {WhitelistSuccessCount}");
                     }
                     else if (current.type == Ints.WhitelistFail)
                     {
@@ -1596,14 +1717,16 @@ namespace Aeternum
                         var cmd = new MySqlCommand($"UPDATE Ints SET WhitelistFail = {WhitelistFailCount}", conn);
                         cmd.ExecuteNonQuery();
                         Console.WriteLine($"Updated Int {current.type} is now: {WhitelistFailCount}");
+                        await DebugConsole($"Aktualizováná hodnota {current.type} na: {WhitelistFailCount}");
                     }
                 }
                 catch
                 {
                     Console.WriteLine($"Couldnt Update Int {current.type} in Database with value: {current.value}");
+                    await DebugConsole($"Nepodařilo se aktualizovat Int {current.type} v databázi hodnotou: {current.value}", DebugLevel.Error);
                 }
             }
-            Database.Disconnect().Wait();
+            await Database.Disconnect();
             await Task.CompletedTask;
         }
         public static async Task UpdateDatabaseRoles(params db_roles[] currentRoles)
@@ -1616,13 +1739,16 @@ namespace Aeternum
                     var cmd = new MySqlCommand($"UPDATE Roles SET {current.type} = {current.id}", conn);
                     cmd.ExecuteNonQuery();
                     Console.WriteLine($"Updated role {current.type} with ID: {current.id}");
+                    await DebugConsole($"Aktualizováná role {current.type} hodnotou: {current.id}");
                 }
-                catch (Exception ex)
+                catch
                 {
                     Console.WriteLine($"Couldnt update {current.type} role in database with value: {current.id}");
+                    await DebugConsole($"Nepodařilo se aktualizovat roli {current.type} v databázi hodnotou: {current.id}", DebugLevel.Error);
+
                 }
             }
-            Database.Disconnect().Wait();
+            await Database.Disconnect();
             await Task.CompletedTask;
         }
         public static async Task UpdateDatabaseBooleans(params db_booleans[] currentBooleans)
@@ -1635,13 +1761,15 @@ namespace Aeternum
                     var cmd = new MySqlCommand($"UPDATE Booleans SET {current.type} = '{current.value}'", conn);
                     cmd.ExecuteNonQuery();
                     Console.WriteLine($"Updated boolean {current.type} with value: {current.value}");
+                    await DebugConsole($"Aktualizováný stav {current.type} hodnotou: {current.value}");
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"[ERROR] Couldnt update {current.type} boolean in database with value: {current.value}");
+                    await DebugConsole($"Nepodařilo se aktualizovat stav {current.type} v databázi hodnotou: {current.value}", DebugLevel.Error);
                 }
             }
-            Database.Disconnect().Wait();
+            await Database.Disconnect();
             await Task.CompletedTask;
         }
         public static async Task UpdateDatabaseOther(params db_other[] currentOther)
@@ -1654,13 +1782,15 @@ namespace Aeternum
                     var cmd = new MySqlCommand($"UPDATE Other SET {current.type} = '{current.value}'", conn);
                     cmd.ExecuteNonQuery();
                     Console.WriteLine($"Updated {current.type} with value: {current.value}");
+                    await DebugConsole($"Aktualizováno {current.type} hodnotou: {current.value}");
                 }
                 catch
                 {
                     Console.WriteLine($"[ERROR] Couldnt update {current.type} in database with value: {current.value}");
+                    await DebugConsole($"Nepodařilo se aktualizovat {current.type} v databázi hodnotou: {current.value}", DebugLevel.Error);
                 }
             }
-            Database.Disconnect().Wait();
+            await Database.Disconnect();
             await Task.CompletedTask;
         }
         #endregion
