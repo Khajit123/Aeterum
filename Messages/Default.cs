@@ -170,10 +170,6 @@ namespace Aeternum.Messages
                     Color = DiscordColor.SpringGreen,
                     Title = "Čauko, zase my",
                     Description = "Neseme radostné zprávy! Zaujal jsi komunitu a velice rádi ti dáváme šanci se k nám přidat, teď už ti nic nebrání v připojení(IP): mc.aeterum.cz. Těšíme se na tebe :blush:",
-                    Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail()
-                    {
-                        Url = Program.Server.IconUrl,
-                    },
                     ImageUrl = "https://cdn.discordapp.com/attachments/1193271233781956732/1237686740060344341/Aeterum_banner.gif?ex=663c8d19&is=663b3b99&hm=dae8f2822b9e356e6376371b77e2451c7fa589683d663e81e63343d90a92a7b9&",
                     Footer = new DiscordEmbedBuilder.EmbedFooter()
                     {
@@ -194,8 +190,24 @@ namespace Aeternum.Messages
         {
             get
             {
+                var embed = new DiscordEmbedBuilder()
+                {
+                    Color = DiscordColor.White,
+                    Title = "Upozornění!",
+                    Description = "Někdo čeká na zkontrolování a ověření žádosti, utíkej mu kliknout na tlačítko",
+                    Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail()
+                    {
+                        Url = "https://4vector.com/i/free-vector-admin-tools-icon_098300_Admin_tools_icon.png",
+                    },
+                    Footer = new DiscordEmbedBuilder.EmbedFooter()
+                    {
+                        Text = "Aeterum Team",
+                        IconUrl = Program.Server.IconUrl,
+                    }
+                };
                 var msg = new DiscordMessageBuilder()
                 {
+                    Embed = embed,
                 };
 
                 return msg;
@@ -213,9 +225,8 @@ namespace Aeternum.Messages
                     Description = "Jedná z přihlášek má nerozhodný stav, popožeň lidí ať zahlasují",
                     Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail()
                     {
-                        Url = Program.Server.IconUrl,
+                        Url = "https://upload.wikimedia.org/wikipedia/commons/2/2e/Exclamation_mark_red.png",
                     },
-                    ImageUrl = "https://upload.wikimedia.org/wikipedia/commons/2/2e/Exclamation_mark_red.png",
                     Footer = new DiscordEmbedBuilder.EmbedFooter()
                     {
                         Text = "Aeterum Team",
@@ -244,7 +255,6 @@ namespace Aeternum.Messages
                     {
                         Url = "https://upload.wikimedia.org/wikipedia/commons/2/2e/Exclamation_mark_red.png",
                     },
-                    ImageUrl = Program.Server.IconUrl,
                     Footer = new DiscordEmbedBuilder.EmbedFooter()
                     {
                         Text = "Aeterum Team",
@@ -274,10 +284,6 @@ namespace Aeternum.Messages
                     Title = "Ahoj!",
                     Description = "Vítejte na našem Minecraft serveru, ponoř se s námi do světa plného inovací a společenství! Všichni jsme vyrůstali na Vanille, ale  tentokrát volíme Slimefun, rozšíření, které přináší do hry nový rozměr s množstvím unikátních předmětů a strojů, které můžete tvořit a používat. Od základních nástrojů až po složité mechanické konstrukce, Aeterum otevírá dveře k nekonečným možnostem a zážitkům.\r\n\r" +
                                   "Díky whitelistu se můžeš těšit také na naši komunitu, která je srdečná a přátelská, vždy připravená pomoci. Jsme prostě parta která se rozrostla v něco víc než jen občasné společné hraní.  Nic nás netěší víc, než když vidíme eventy, soutěže a společné projekty, které podporují týmového ducha. Připojte se k nám a staňte se součástí naší rostoucí komunity, kde každý den je dobrodružství!",
-                    Thumbnail = new DiscordEmbedBuilder.EmbedThumbnail()
-                    {
-                        Url = Program.Server.IconUrl,
-                    },
                     Footer = new DiscordEmbedBuilder.EmbedFooter()
                     {
                         Text = "Aeterum Team",
