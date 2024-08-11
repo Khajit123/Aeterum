@@ -781,22 +781,23 @@ namespace Aeternum
         private static async Task OnMemberUpdate(DiscordClient sender, GuildMemberUpdateEventArgs args)
         {
             StringBuilder sb = new StringBuilder();
+            sb.AppendLine("");
             sb.AppendLine("  Member Before:");
-            sb.AppendLine($"  {args.MemberBefore.Username} [{args.MemberBefore.DisplayName}] ({args.MemberBefore.Nickname})");
+            sb.AppendLine($"  {args.MemberBefore.Username} [{args.MemberBefore.Nickname}] ({args.MemberBefore.Nickname})");
             sb.AppendLine($"  {args.MemberBefore.Email}");
             sb.AppendLine($"  CREATION:{args.MemberBefore.CreationTimestamp.UtcDateTime}");
-            sb.AppendLine($"  JOINEDAT:{args.MemberBefore.JoinedAt}");
-            sb.AppendLine($"  LOCALE:{args.MemberBefore.Locale}");
-            sb.AppendLine($"  MFA: {args.MemberBefore.MfaEnabled}");
-            sb.AppendLine($"  {args.MemberBefore.Roles}");
+            sb.AppendLine($"  JOINEDAT:{args.MemberBefore.JoinedAt.UtcDateTime}");
+            sb.AppendLine($"  LOCALE:{args.MemberBefore.Locale.ToArray()}");
+            sb.AppendLine($"  MFA: {args.MemberBefore.MfaEnabled.Value}");
+            sb.AppendLine($"  {args.MemberBefore.Roles.ToArray()}");
             sb.AppendLine("");
             sb.AppendLine("  Member After:");
             sb.AppendLine($"  {args.MemberAfter.Username} [{args.MemberAfter.DisplayName}] ({args.MemberAfter.Nickname})");
             sb.AppendLine($"  {args.MemberAfter.Email}");
             sb.AppendLine($"  CREATION:{args.MemberAfter.CreationTimestamp.UtcDateTime}");
-            sb.AppendLine($"  JOINEDAT:{args.MemberAfter.JoinedAt}");
-            sb.AppendLine($"  LOCALE:{args.MemberAfter.Locale}");
-            sb.AppendLine($"  MFA: {args.MemberAfter.MfaEnabled}");
+            sb.AppendLine($"  JOINEDAT:{args.MemberAfter.JoinedAt.UtcDateTime}");
+            sb.AppendLine($"  LOCALE:{args.MemberAfter.Locale.ToArray()}");
+            sb.AppendLine($"  MFA: {args.MemberAfter.MfaEnabled.Value}");
             sb.AppendLine($"  {args.MemberAfter.Roles}");
 
             await DebugConsole(sb.ToString());
@@ -1331,7 +1332,6 @@ namespace Aeternum
                 {
                     // Log other exceptions and handle them accordingly
                     Console.WriteLine($"An unexpected error occurred: {ex.Message}");
-                    await DebugConsole($"An unexpected error occurred: {ex.Message}", DebugLevel.Error);
                     break;
                 }
             }
@@ -1481,10 +1481,13 @@ namespace Aeternum
 
             if (ToDoMessage.Embeds.FirstOrDefault().Fields == null) { await Task.CompletedTask; return; }
             ToDoList.Clear();
-            for (int i = 0; i < ToDoMessage.Embeds.FirstOrDefault().Fields.Count; i++)
+            foreach (var embed in ToDoMessage.Embeds)
             {
-                string msg = ToDoMessage.Embeds.FirstOrDefault().Fields[i].Value;
-                ToDoList.Add(msg);
+                foreach (var field in embed.Fields)
+                {
+                    string msg = field.Value;
+                    ToDoList.Add(msg);
+                }
             }
 
             await Task.CompletedTask;
@@ -1762,7 +1765,7 @@ namespace Aeternum
                 DiscordMessage lastMessage = await GetLastBotMessageAsync(Program.GetChannel(Database.ChannelNames.DebugConsole));
 
                 if (lastMessage != null && ((lastMessage.Content.Length + formattedText.Length) < 2000) && 
-                    lastMessage.Embeds == null)
+                    lastMessage.Embeds.Count == 0)
                 {
                     string fixedLastMessage = lastMessage.Content.Trim('`').Replace("diff", "");
                     string newMessage = $"```diff{Environment.NewLine}{fixedLastMessage}{Environment.NewLine}{formattedText}```";
