@@ -1123,7 +1123,7 @@ namespace Aeternum
                 .WithCustomId("modal_whitelist");
             modal.AddComponents(new TextInputComponent("Nickname", "nicknameLabelID", "Tvá přezdívka ve hře"));
             modal.AddComponents(new TextInputComponent("Věk", "ageLabelID", "Tvůj věk"));
-            modal.AddComponents(new TextInputComponent("Jak ses o nás dozvěděl/a?", "knowDescID", "Např. Minecraft List, Kamarád, atd..."));
+            modal.AddComponents(new TextInputComponent("Jak ses o nás dozvěděl/a?", "knowDescID", "Např. Minecraft List, buď specifický..."));
             modal.AddComponents(new TextInputComponent("Co od serveru očekáváš?", "expectationDescID"));
             modal.AddComponents(new TextInputComponent("Něco o sobě", "infoDescID", "Zde se rozepiš", null, true, TextInputStyle.Paragraph));
 
@@ -1133,17 +1133,20 @@ namespace Aeternum
         private static async Task NewWhitelist(ModalSubmitEventArgs args)
         {
             var msg = new DiscordMessageBuilder();
+            bool hasResponded = false;  // Track if a response has been sent
+
             try
             {
                 // Buttons
-                var approveButton = CreateButtonComponent(ButtonStyle.Success, "btn_approve_id", "Prošel", false, Btn_ApproveEmoji).Result;
-                var closeButton = CreateButtonComponent(ButtonStyle.Danger, "btn_close_id", "Neprošel", false, Btn_DisApproveEmoji).Result;
+                var approveButton = await CreateButtonComponent(ButtonStyle.Success, "btn_approve_id", "Prošel", false, Btn_ApproveEmoji);
+                var closeButton = await CreateButtonComponent(ButtonStyle.Danger, "btn_close_id", "Neprošel", false, Btn_DisApproveEmoji);
 
                 // Messages
                 msg = new DiscordMessageBuilder()
-                        .WithContent(args.Interaction.User.Mention)
+                        .WithContent(args.Interaction.User.Mention + " ||" + GetRole(RoleNames.Whitelisted).Mention + "||")
                         .WithAllowedMentions(new IMention[] { new UserMention(args.Interaction.User) })
                         .AddComponents(approveButton, closeButton);
+
                 var embedMessage = new DiscordEmbedBuilder
                 {
                     Color = new DiscordColor("89CFF0"),
@@ -1154,6 +1157,7 @@ namespace Aeternum
                         IconUrl = args.Interaction.User.AvatarUrl
                     },
                 };
+
                 embedMessage.AddField("Nickname", args.Values["nicknameLabelID"], false);
                 embedMessage.AddField("Věk", args.Values["ageLabelID"], false);
                 embedMessage.AddField("Jak ses o nás dozvěděl/a?", args.Values["knowDescID"], false);
@@ -1162,7 +1166,10 @@ namespace Aeternum
                 char[] contentArray = args.Values["infoDescID"].ToArray();
                 int first = 1;
 
-                if (contentArray.Length <= 1024) { embedMessage.AddField("Něco o sobě", args.Values["infoDescID"], false); }
+                if (contentArray.Length <= 1024)
+                {
+                    embedMessage.AddField("Něco o sobě", args.Values["infoDescID"], false);
+                }
                 else
                 {
                     string stopWhen = ".";
@@ -1189,7 +1196,6 @@ namespace Aeternum
                             embedMessage.AddField("|", string.Join("", contentArray.Take(currentCharPos).ToArray()), false);
                         }
                         contentArray = contentArray.Skip(currentCharPos).ToArray();
-
                     }
 
                     if (contentArray.Length <= 1024)
@@ -1197,7 +1203,6 @@ namespace Aeternum
                         embedMessage.AddField("|", string.Join("", contentArray), false);
                     }
                 }
-
 
                 embedMessage.WithFooter("Zbývá: 2 dny 0 hodin 0 minut");
                 string playerUUID = await GetMinecraftUUIDByUsername(args.Values["nicknameLabelID"]);
@@ -1207,24 +1212,34 @@ namespace Aeternum
                 var sentMSG = await Program.GetChannel(ChannelNames.Whitelist).SendMessageAsync(msg);
                 await sentMSG.CreateReactionAsync(ApproveEmoji);
                 await sentMSG.CreateReactionAsync(DisApproveEmoji);
+
+                // Respond to the interaction
+                await args.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("Přihlášku jsi vytvořil, za celý projekt ti přejeme hodně štěstí s úspěchem! ^-^").AsEphemeral(true));
+                hasResponded = true;
             }
             catch (Exception ex)
             {
-                await args.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("Něco se pokazilo s přihláškou, prosím utvoř si ticket!").AsEphemeral(true));
+                if (!hasResponded)
+                {
+                    await args.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("Něco se pokazilo s přihláškou, prosím utvoř si ticket!").AsEphemeral(true));
+                    hasResponded = true;
+                }
                 await DebugConsole($"Přihlášku pro uživatele {args.Interaction.User.Username} nebylo možné utvořit! - {ex.Message}", DebugLevel.Error);
                 await Program.GetChannel(ChannelNames.DebugConsole).SendMessageAsync(msg);
                 return;
             }
 
-            // Aktualizace databaze
+            // Aktualizace databáze
             var conn = await Database.Connect();
             int newInt = Program.GetInt(IntNames.WhitelistTotal) + 1;
             await Program.UpdateInt(conn, IntNames.WhitelistTotal, newInt);
             await Database.Disconnect();
 
-            await args.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("Přihlášku jsi vytvořil, za celý projekt ti přejeme hodně štěstí s úspěchem! ^-^").AsEphemeral(true));
+            Console.WriteLine("Here");
+            Console.WriteLine("Here2");
             await Task.CompletedTask;
         }
+
         public static async Task RevokeWhitelist(DiscordMessage archivedWhitelist)
         {
             // Buttons
