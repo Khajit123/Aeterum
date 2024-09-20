@@ -2,10 +2,13 @@
 using DSharpPlus.CommandsNext.Attributes;
 using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
+using Org.BouncyCastle.Utilities.Bzip2;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.Metrics;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
@@ -409,7 +412,7 @@ namespace Aeternum.Commands.Slash
             foreach (var message in messagesInChannel)
             {
                 await message.DeleteAsync();
-                await Task.Delay(TimeSpan.FromSeconds(5).Milliseconds);
+                await Task.Delay(TimeSpan.FromSeconds(5));
             }
 
             foreach (PropertyInfo property in properties)
@@ -427,7 +430,7 @@ namespace Aeternum.Commands.Slash
 
                     // Send the message to the channel
                     await messageListChannel.SendMessageAsync(msgToBeSent);
-                    await Task.Delay(TimeSpan.FromSeconds(5).Milliseconds);
+                    await Task.Delay(TimeSpan.FromSeconds(5));
                 }
             }
 
@@ -435,6 +438,152 @@ namespace Aeternum.Commands.Slash
                 .WithContent($"Aktualizoval jsi preview zpráv."));
             await Task.CompletedTask;
         }
+
+        #region FixThings
+        [SlashCommand("sync-whitelist-database", "Synchronizuje databázi na webu s discord whitelist")]
+        [RequireUserPermissions(Permissions.Administrator)]
+        public async Task syncWhitelist(InteractionContext ctx)
+        {
+            DiscordChannel whitelistArchive = Program.GetChannel(Database.ChannelNames.WhitelistArchive);
+            if (ctx.Channel.Id != whitelistArchive.Id) { return; }
+            await ctx.DeferAsync(true);
+            DiscordChannel join_leave = Program.GetChannel(Database.ChannelNames.UserLogging);
+
+            var messages = await whitelistArchive.GetMessagesAsync(500);
+            messages = messages.ToArray().Reverse().ToList();
+            var join_leave_messages = await join_leave.GetMessagesAsync(500);
+
+            Console.WriteLine("Messages " + messages.Count);
+            Console.WriteLine("Join Leave Messages " + join_leave_messages.Count);
+            var conn = await Database.Connect();
+            foreach (var message in messages)
+            {
+                try
+                {
+                    // Připrava na databázi
+                    string discord_Nickname = message.Embeds.First().Author.Name.Replace("'", "′");
+                    string discord_Id;
+                    try
+                    {
+                        discord_Id = join_leave_messages.Where(x => x.Embeds.First().Title == discord_Nickname).FirstOrDefault().Embeds.First().Fields[0].Value;
+                    }
+                    catch
+                    {
+                        discord_Id = "Nenalezeno";
+                    }
+                    bool whitelist_Successful = message.Embeds.First().Color.Value.ToString() == "#00FF00" ? true : false;
+                    string whitelist_Nickname = message.Embeds.First().Fields[0].Value.Replace("'", "′");
+                    string whitelist_Age = message.Embeds.First().Fields[1].Value.Replace("'", "′");
+                    string whitelist_How_Did_You_Find_About_Us = message.Embeds.First().Fields[2].Value.Replace("'", "′");
+                    string whitelsit_Expectations = message.Embeds.First().Fields[3].Value.Replace("'", "′");
+                    string whitelist_About_Yourself = message.Embeds.First().Fields[4].Value.Replace("'", "′");
+
+                    var splitted_Approved_Count = Regex.Replace(message.Embeds.First().Fields[5].Name, @"\D", "");
+                    int whitelist_Approved_Count = Int32.Parse(splitted_Approved_Count);
+                    string whitelist_Approved_Names = message.Embeds.First().Fields[5].Value.Replace("'", "′");
+
+                    var splitted_DisApproved_Count = Regex.Replace(message.Embeds.First().Fields[6].Name, @"\D", "");
+                    int whitelist_DissApproved_Count = Int32.Parse(splitted_DisApproved_Count);
+                    string whitelist_DissApproved_Names = message.Embeds.First().Fields[6].Value.Replace("'", "′");
+
+                    string[] formats = { "M/d/yyyy h:mm:ss tt", "M/d/yyyy h:mm tt", "MM/dd/yyyy HH:mm:ss" };  // Add more if needed
+                    string whitelist_Created_At;
+                    try
+                    {
+                        DateTime UtcCreated_At = DateTime.ParseExact(message.Embeds.First().Fields[7].Value, formats,
+                                              System.Globalization.CultureInfo.InvariantCulture,
+                                              System.Globalization.DateTimeStyles.None);
+                        whitelist_Created_At = Program.GetCzechRepublicTimeZoneFromUTC(UtcCreated_At).ToString();
+                    }
+                    catch { whitelist_Created_At = "Nenalezeno"; }
+
+                    string whitelist_Closed_At;
+                    try
+                    {
+                        DateTime UtcClosed_At = DateTime.ParseExact(message.Embeds.First().Fields[8].Value, formats,
+                                            System.Globalization.CultureInfo.InvariantCulture,
+                                            System.Globalization.DateTimeStyles.None);
+                        whitelist_Closed_At = Program.GetCzechRepublicTimeZoneFromUTC(UtcClosed_At).ToString();
+                    }
+                    catch { whitelist_Closed_At = "Nenalezeno"; }
+
+
+                    string whitelist_Closed_By = message.Embeds.First().Footer.Text.Replace("Zkontroloval:", "");
+
+                    await Database.UpdateWhitelist(conn, discord_Nickname, discord_Id, whitelist_Successful, whitelist_Nickname, whitelist_Age,
+                        whitelist_How_Did_You_Find_About_Us, whitelsit_Expectations, whitelist_About_Yourself, whitelist_Approved_Count, whitelist_Approved_Names,
+                        whitelist_DissApproved_Count, whitelist_DissApproved_Names, whitelist_Created_At, whitelist_Closed_At, whitelist_Closed_By);
+                    await Task.Delay(TimeSpan.FromSeconds(1));
+                }
+                catch (Exception ex) { Console.WriteLine($"Nepodarilo se udelat prihlasku od {message.Embeds.First().Author.Name} - {ex.StackTrace} - {ex.Message}"); await Database.Disconnect(); return; }
+
+            }
+            await Database.Disconnect();
+
+            await ctx.FollowUpAsync(new DiscordFollowupMessageBuilder()
+                .WithContent($"Aktualizoval jsi databázi z whitelist-archív zpráv."));
+            await Task.CompletedTask;
+        }
+
+        [SlashCommand("fix-whitelist-total-count", "Opraví a přepíše titulek u přihlášek podle spravného pořadí")]
+        [RequireUserPermissions(Permissions.Administrator)]
+        public async Task fixWhitelistCountAndDate(InteractionContext ctx)
+        {
+            DiscordChannel whitelistArchive = Program.GetChannel(Database.ChannelNames.WhitelistArchive);
+            if (ctx.Channel.Id != whitelistArchive.Id) { return; }
+            await ctx.DeferAsync(true);
+
+            var messages = await whitelistArchive.GetMessagesAsync(500);
+            messages = messages.ToArray().Reverse().ToList();
+            int counter = 1;
+
+            foreach (var message in messages)
+            {
+                try
+                {
+                    Console.WriteLine("Updating user: " + message.Embeds.First().Fields.First().Value);
+                    string[] formats = { "M/d/yyyy h:mm:ss tt", "M/d/yyyy h:mm tt", "MM/dd/yyyy HH:mm:ss" };  // Add more if needed
+                    string whitelist_Created_At = message.Embeds.First().Fields[7].Value;
+                    try
+                    {
+                        DateTime UtcCreated_At = DateTime.ParseExact(message.Embeds.First().Fields[7].Value, formats,
+                                              System.Globalization.CultureInfo.InvariantCulture,
+                                              System.Globalization.DateTimeStyles.None);
+                        whitelist_Created_At = Program.GetCzechRepublicTimeZoneFromUTC(UtcCreated_At).ToString();
+                    }
+                    catch {}
+
+                    string whitelist_Closed_At = message.Embeds.First().Fields[8].Value;
+                    try
+                    {
+                        DateTime UtcClosed_At = DateTime.ParseExact(message.Embeds.First().Fields[8].Value, formats,
+                                            System.Globalization.CultureInfo.InvariantCulture,
+                                            System.Globalization.DateTimeStyles.None);
+                        whitelist_Closed_At = Program.GetCzechRepublicTimeZoneFromUTC(UtcClosed_At).ToString();
+                    }
+                    catch {}
+
+                    var modifiedMessage = new DiscordMessageBuilder()
+                        .WithEmbed(new DiscordEmbedBuilder(message.Embeds.First()).WithTitle($"Přihláška #{counter++}")
+                        .RemoveFieldAt(7).RemoveFieldAt(7)
+                        .AddField("Vytvořená:", whitelist_Created_At, true).AddField("Uzavřená:", whitelist_Closed_At, true));
+
+                    await message.ModifyAsync(modifiedMessage);
+                    await Task.Delay(TimeSpan.FromSeconds(5));
+                }
+                catch (Exception ex)
+                {
+
+                    Console.WriteLine($"Nepodarilo se udelat prihlasku od {message.Embeds.First().Author.Name} - {ex.StackTrace} - {ex.Message}"); 
+                    return;
+                }
+            }
+
+            await ctx.FollowUpAsync(new DiscordFollowupMessageBuilder()
+                .WithContent($"Aktualizoval jsi total count v přihláškách a data na české."));
+            await Task.CompletedTask;
+        }
+        #endregion
 
         //-------------------------------------------------------------------
         //                   Changelog
@@ -515,6 +664,36 @@ namespace Aeternum.Commands.Slash
                 await Program.DebugConsole($"Uživateli {ctx.TargetMessage.Content} byla obnovena přihláška)");
                 await Task.CompletedTask;
             }
+        }
+
+        // Uzavřít přihlášku
+        [ContextMenu(ApplicationCommandType.MessageContextMenu, "PROŠEL - Uzavřít přihlášku")]
+        [RequireUserPermissions(Permissions.Administrator)]
+        public async Task acceptedWhitelist(ContextMenuContext ctx)
+        {
+            if (ctx.TargetMessage.Channel.Id == Program.GetChannel(Database.ChannelNames.Whitelist).Id)
+            {
+                await Program.WhitelistSuccess(ctx);
+                await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder()
+                    .WithContent($"Uzavřel jsi přihlášku hráči {ctx.TargetMessage.MentionedUsers.First().Username} jako prošel").AsEphemeral(true));
+                await Program.DebugConsole($"Uživateli {ctx.TargetMessage.MentionedUsers.First().Username} byla uzavřená přihláška jako prošel)");
+                await Task.CompletedTask;
+            }
+            return;
+        }
+
+        [ContextMenu(ApplicationCommandType.MessageContextMenu, "NEPROŠEL - Uzavřít přihlášku")]
+        [RequireUserPermissions(Permissions.Administrator)]
+        public async Task notacceptedWhitelist(ContextMenuContext ctx)
+        {
+            if (ctx.TargetMessage.Channel.Id == Program.GetChannel(Database.ChannelNames.Whitelist).Id)
+            {
+                await Program.WhitelistArchive(ctx);
+                await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder()
+                    .WithContent($"Uzavřel jsi přihlášku hráči {ctx.TargetMessage.MentionedUsers.First().Username} jako neprošel").AsEphemeral(true));
+                await Program.DebugConsole($"Uživateli {ctx.TargetMessage.MentionedUsers.First().Username} byla uzavřená přihláška jako neprošel)");
+            }
+            return;
         }
     }
 }
