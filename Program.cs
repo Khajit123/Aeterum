@@ -1759,9 +1759,18 @@ namespace Aeternum
 
         public static DateTime GetCzechRepublicTimeZoneFromUTC(DateTime utc)
         {
-            TimeZoneInfo czechTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Central Europe Standard Time");
-            DateTime czechTime = TimeZoneInfo.ConvertTimeFromUtc(utc, czechTimeZone);
-            return czechTime;
+            try
+            {
+                TimeZoneInfo czechTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Central Europe Standard Time");
+                DateTime czechTime = TimeZoneInfo.ConvertTimeFromUtc(utc, czechTimeZone);
+                return czechTime;
+            }
+            catch (Exception ex)
+            {
+
+                DebugConsole($"Nepovedlo se změnít datetime na CZ - {ex.Message}", DebugLevel.Error).Wait();
+                return utc;
+            }
         }
 
         //
