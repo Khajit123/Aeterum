@@ -1761,21 +1761,9 @@ namespace Aeternum
         {
             try
             {
-                try
-                {
-                    TimeZoneInfo czechTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Central Europe Standard Time");
-                    DateTime czechTime = TimeZoneInfo.ConvertTimeFromUtc(utc, czechTimeZone);
-                    return czechTime;
-                }
-                catch 
-                {
-                    string[] formats = { "M/d/yyyy h:mm:ss tt", "M/d/yyyy h:mm tt", "MM/dd/yyyy HH:mm:ss" };  // Add more if needed
-                    DateTime UtcFixed = DateTime.ParseExact(utc.ToString(), formats,
-                                          System.Globalization.CultureInfo.InvariantCulture,
-                                          System.Globalization.DateTimeStyles.None);
-                    var czechFixed = Program.GetCzechRepublicTimeZoneFromUTC(UtcFixed);
-                    return czechFixed;
-                }
+                TimeZoneInfo czechTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Central Europe Standard Time");
+                DateTime czechTime = TimeZoneInfo.ConvertTimeFromUtc(utc, czechTimeZone);
+                return czechTime;
             }
             catch (Exception ex)
             {
