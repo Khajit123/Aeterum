@@ -16,6 +16,7 @@ namespace Aeternum.Commands.Slash
 {
     public class BasicSL : ApplicationCommandModule
     {
+        bool whitelistCommandAlreadyInUse = false;
         //--------------------------------------------------
         //                   Oznámení
         // -------------------------------------------------
@@ -673,11 +674,23 @@ namespace Aeternum.Commands.Slash
         {
             if (ctx.TargetMessage.Channel.Id == Program.GetChannel(Database.ChannelNames.Whitelist).Id)
             {
-                await Program.WhitelistSuccess(ctx);
-                await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder()
-                    .WithContent($"Uzavřel jsi přihlášku hráči {ctx.TargetMessage.MentionedUsers.First().Username} jako prošel").AsEphemeral(true));
-                await Program.DebugConsole($"Uživateli {ctx.TargetMessage.MentionedUsers.First().Username} byla uzavřená přihláška jako prošel)");
-                await Task.CompletedTask;
+                if (whitelistCommandAlreadyInUse == false)
+                {
+                    whitelistCommandAlreadyInUse = true;
+
+                    await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder()
+                        .WithContent($"Uzavřel jsi přihlášku hráči {ctx.TargetMessage.MentionedUsers.First().Username} jako prošel").AsEphemeral(true));
+                    await Program.DebugConsole($"Uživateli {ctx.TargetMessage.MentionedUsers.First().Username} byla uzavřená přihláška jako prošel)");
+                    await Program.WhitelistSuccess(ctx);
+                    whitelistCommandAlreadyInUse = false;
+                    await Task.CompletedTask;
+                }
+                else
+                {
+                    await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder()
+                        .WithContent($"Někdo již uzavírá přihlášku před tebou.").AsEphemeral(true));
+                    await Task.CompletedTask;
+                }
             }
             return;
         }
@@ -688,10 +701,23 @@ namespace Aeternum.Commands.Slash
         {
             if (ctx.TargetMessage.Channel.Id == Program.GetChannel(Database.ChannelNames.Whitelist).Id)
             {
-                await Program.WhitelistArchive(ctx);
-                await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder()
-                    .WithContent($"Uzavřel jsi přihlášku hráči {ctx.TargetMessage.MentionedUsers.First().Username} jako neprošel").AsEphemeral(true));
-                await Program.DebugConsole($"Uživateli {ctx.TargetMessage.MentionedUsers.First().Username} byla uzavřená přihláška jako neprošel)");
+                if (whitelistCommandAlreadyInUse == false)
+                {
+                    whitelistCommandAlreadyInUse= true;
+
+                    await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder()
+                        .WithContent($"Uzavřel jsi přihlášku hráči {ctx.TargetMessage.MentionedUsers.First().Username} jako neprošel").AsEphemeral(true));
+                    await Program.DebugConsole($"Uživateli {ctx.TargetMessage.MentionedUsers.First().Username} byla uzavřená přihláška jako neprošel)");
+                    await Program.WhitelistArchive(ctx);
+                    whitelistCommandAlreadyInUse = false;
+                    await Task.CompletedTask;
+                }
+                else
+                {
+                    await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder()
+                        .WithContent($"Někdo již uzavírá přihlášku před tebou.").AsEphemeral(true));
+                    await Task.CompletedTask;
+                }
             }
             return;
         }
